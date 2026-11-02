@@ -16,6 +16,15 @@ import (
 // remoteReadOnly are the Erghi-hosted MCP tools offered in read-only mode.
 var remoteReadOnly = []string{"list_conversations", "get_conversation", "get_billing_plans"}
 
+// remoteScopes are the scopes the hosted tools check on their side. A tool
+// not listed here is offered to every key and left to the API to refuse.
+var remoteScopes = map[string][]string{
+	"list_conversations":   {"chat:read"},
+	"get_conversation":     {"chat:read"},
+	"send_reply":           {"chat:write"},
+	"resolve_conversation": {"chat:write"},
+}
+
 // remote forwards calls to the MCP endpoint Erghi itself hosts at /api/mcp
 // (conversations, replies, billing plans), so one server exposes both.
 type remote struct {
@@ -54,6 +63,10 @@ func RegisterRemote(ctx context.Context, server *mcp.Server, api *erghi.Client, 
 	var added []string
 	for _, t := range list.Tools {
 		if opts.ReadOnly && !slices.Contains(remoteReadOnly, t.Name) {
+			continue
+		}
+		if need := remoteScopes[t.Name]; len(need) > 0 &&
+			!slices.ContainsFunc(need, func(s string) bool { return slices.Contains(opts.Scopes, s) }) {
 			continue
 		}
 		tool := &mcp.Tool{

@@ -48,6 +48,14 @@ func newHarness(t *testing.T, opts Options) *harness {
 			_, _ = w.Write([]byte(`[{"id":"a"},{"id":"b"}]`))
 		case "/api/v1/branding":
 			_, _ = w.Write([]byte(`{"aiAssistantName":"Nour","aiSystemPrompt":"Help Acme customers."}`))
+		case "/api/v1/integrations":
+			if r.Method == http.MethodGet {
+				_, _ = w.Write([]byte(integrationsFixture))
+			} else {
+				_, _ = w.Write([]byte(`{"ok":true}`))
+			}
+		case "/api/v1/admin/action-policies":
+			_, _ = w.Write([]byte(`[]`))
 		default:
 			_, _ = w.Write([]byte(`{"ok":true}`))
 		}
@@ -251,5 +259,144 @@ func TestSetupChecklistMirrorsDashboard(t *testing.T) {
 	}
 	if c.Done != 2 || c.Total != 5 || !strings.Contains(text, "https://app.test/users") {
 		t.Errorf("checklist = %+v", c)
+	}
+}
+
+const integrationID = "1b4e28ba-2fa1-11d2-883f-0016d3cca427"
+
+// integrationsFixture is GET /api/v1/integrations?includeEndpoints=true for one
+// integration with a literal credential binding, an unbound user id and an
+// unprotected write.
+const integrationsFixture = `[{
+  "id": "` + integrationID + `", "name": "Orders", "baseUrl": "https://api.acme.test", "isActive": true, "endpointCount": 2,
+  "requestBindings": [{"in": "header", "name": "Authorization", "value": "Bearer abc123", "required": true}],
+  "aiInstructions": null,
+  "endpoints": [
+    {"id": "6a1f0d1e-0000-4000-8000-000000000001", "operationId": "getOrders", "method": "GET", "path": "/users/{user_id}/orders",
+     "parametersJson": "[{\"Name\":\"user_id\",\"In\":\"path\",\"Required\":true}]", "requestBindings": []},
+    {"id": "6a1f0d1e-0000-4000-8000-000000000002", "operationId": "cancelOrder", "method": "POST", "path": "/orders/{id}/cancel",
+     "parametersJson": "[{\"Name\":\"id\",\"In\":\"path\",\"Required\":true}]", "requestBindings": []}
+  ]
+}]`
+
+func TestIntegrationToolsFollowTheirScope(t *testing.T) {
+	names := newHarness(t, Options{Scopes: []string{"manage_integrations"}}).toolNames(t)
+	for _, want := range []string{"list_integrations", "add_integration_from_openapi", "set_integration_tool_context", "test_integration_endpoint", "delete_integration", "review_chat_setup", "get_erghi_guide"} {
+		if !slices.Contains(names, want) {
+			t.Errorf("missing %s", want)
+		}
+	}
+	names = newHarness(t, Options{Scopes: []string{"configure_ai"}}).toolNames(t)
+	if slices.Contains(names, "list_integrations") || !slices.Contains(names, "create_action_policy") {
+		t.Errorf("configure_ai tools = %v", names)
+	}
+}
+
+func TestAddIntegrationUploadsTheSpec(t *testing.T) {
+	h := newHarness(t, Options{Scopes: []string{"manage_integrations"}})
+	res, text := h.call(t, "add_integration_from_openapi", map[string]any{
+		"name": "Orders", "baseUrl": "https://api.acme.test", "specContent": `{"openapi":"3.0.0","paths":{}}`,
+	})
+	got := h.recorded()
+	if res.IsError || len(got) != 1 || got[0].method != http.MethodPost || got[0].path != "/api/v1/integrations/upload-spec" {
+		t.Fatalf("upload: %s %v", text, got)
+	}
+	for _, want := range []string{`name="specFile"; filename="openapi.json"`, `name="integrationName"`, "Orders", `{"openapi":"3.0.0","paths":{}}`} {
+		if !strings.Contains(got[0].body, want) {
+			t.Errorf("multipart body missing %q", want)
+		}
+	}
+}
+
+func TestToolContextTargetsTheEndpoint(t *testing.T) {
+	h := newHarness(t, Options{Scopes: []string{"manage_integrations"}})
+	endpointID := "6a1f0d1e-0000-4000-8000-000000000001"
+	h.call(t, "set_integration_tool_context", map[string]any{"integrationId": integrationID, "endpointId": endpointID})
+	got := h.recorded()
+	if len(got) != 1 || got[0].method != http.MethodPut ||
+		got[0].path != "/api/v1/integrations/"+integrationID+"/endpoints/"+endpointID+"/tool-context" ||
+		got[0].body != `{"aiInstructions":null,"requestBindings":[]}` {
+		t.Fatalf("tool context call = %v", got)
+	}
+}
+
+func TestTestingAWriteEndpointNeedsConfirm(t *testing.T) {
+	h := newHarness(t, Options{Scopes: []string{"manage_integrations"}})
+	res, text := h.call(t, "test_integration_endpoint", map[string]any{"integrationId": integrationID, "operationId": "cancelOrder"})
+	if !res.IsError || !strings.Contains(text, "confirm=true") {
+		t.Fatalf("unconfirmed POST test: %v %s", res.IsError, text)
+	}
+	h.call(t, "test_integration_endpoint", map[string]any{"integrationId": integrationID, "operationId": "getOrders", "pathParameters": map[string]string{"user_id": "u1"}})
+	var tests []recorded
+	for _, c := range h.recorded() {
+		if strings.HasSuffix(c.path, "/test") {
+			tests = append(tests, c)
+		}
+	}
+	if len(tests) != 1 || !strings.Contains(tests[0].body, `"operationId":"getOrders"`) || !strings.Contains(tests[0].body, `"useSavedCredentials":true`) {
+		t.Fatalf("test calls = %v", tests)
+	}
+}
+
+func TestReviewFindsIntegrationRisks(t *testing.T) {
+	h := newHarness(t, Options{Scopes: []string{"configure_ai", "manage_integrations"}})
+	res, text := h.call(t, "review_chat_setup", nil)
+	if res.IsError {
+		t.Fatal(text)
+	}
+	var rev chatSetupReview
+	if err := json.Unmarshal([]byte(text), &rev); err != nil {
+		t.Fatal(err)
+	}
+	has := func(sev, substr string) bool {
+		return slices.ContainsFunc(rev.Findings, func(f finding) bool { return f.Severity == sev && strings.Contains(f.Issue+f.Area, substr) })
+	}
+	if !has("high", `"user_id"`) {
+		t.Error("unbound user_id not flagged")
+	}
+	if !has("high", "Authorization") {
+		t.Error("literal Authorization binding not flagged")
+	}
+	if !has("medium", "cancelOrder") {
+		t.Error("unprotected write not flagged")
+	}
+	if has("high", `"id"`) {
+		t.Error("a plain resource id was flagged as a user id")
+	}
+	if rev.Findings[0].Severity != "high" || !slices.Contains(rev.NotChecked, "widgets (need manage_widgets)") {
+		t.Errorf("review = %+v", rev)
+	}
+}
+
+func TestGuide(t *testing.T) {
+	h := newHarness(t, Options{})
+	_, text := h.call(t, "get_erghi_guide", map[string]any{"topic": "integrations"})
+	if !strings.Contains(text, "{{identity.sub}}") {
+		t.Errorf("integrations guide = %.80s", text)
+	}
+	_, text = h.call(t, "get_erghi_guide", nil)
+	for _, g := range guideTopics {
+		if !strings.Contains(text, g.topic) {
+			t.Errorf("topic list missing %s", g.topic)
+		}
+		if _, err := guide(g.topic); err != nil {
+			t.Errorf("%s: %v", g.topic, err)
+		}
+	}
+}
+
+func TestAnalyzeProductPrompt(t *testing.T) {
+	h := newHarness(t, Options{})
+	res, err := h.session.GetPrompt(context.Background(), &mcp.GetPromptParams{
+		Name: "analyze_product", Arguments: map[string]string{"website": "https://acme.test"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := res.Messages[0].Content.(*mcp.TextContent).Text
+	for _, want := range []string{"https://acme.test", "review_chat_setup", "product_analysis", "https://app.test/integrations", "another customer's data"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("prompt missing %q", want)
+		}
 	}
 }

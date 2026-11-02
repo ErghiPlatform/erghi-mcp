@@ -13,17 +13,19 @@ import (
 
 // Scope names, as issued on Erghi API keys.
 const (
-	scopeConfigureAI = "configure_ai"
-	scopeIdentity    = "manage_workspace_identity"
-	scopeWidgets     = "manage_widgets"
-	scopeAudit       = "view_audit_logs"
+	scopeConfigureAI  = "configure_ai"
+	scopeIdentity     = "manage_workspace_identity"
+	scopeWidgets      = "manage_widgets"
+	scopeIntegrations = "manage_integrations"
+	scopeAudit        = "view_audit_logs"
 )
 
 var (
-	needAI       = []string{scopeConfigureAI}
-	needBranding = []string{scopeConfigureAI, scopeIdentity}
-	needWidgets  = []string{scopeWidgets}
-	needAudit    = []string{scopeAudit}
+	needAI           = []string{scopeConfigureAI}
+	needBranding     = []string{scopeConfigureAI, scopeIdentity}
+	needWidgets      = []string{scopeWidgets}
+	needIntegrations = []string{scopeIntegrations}
+	needAudit        = []string{scopeAudit}
 )
 
 type empty struct{}
@@ -109,7 +111,7 @@ type addDocumentInput struct {
 	Title   string `json:"title" jsonschema:"Short document title"`
 	Content string `json:"content" jsonschema:"Plain text or Markdown the assistant should know"`
 	Source  string `json:"source,omitempty" jsonschema:"Where it came from, e.g. a URL"`
-	Kind    string `json:"kind,omitempty" jsonschema:"Optional document kind"`
+	Kind    string `json:"kind,omitempty" jsonschema:"reference (default): facts the assistant quotes. instruction: staff guidance for a topic (e.g. a refund playbook), retrieved only on turns it applies to and never quoted as a source"`
 }
 
 type addFAQInput struct {
@@ -162,7 +164,7 @@ func registerKnowledge(r *registry) {
 	})
 	add(r, write, needAI, &mcp.Tool{
 		Name:        "add_knowledge_document",
-		Description: "Add a text document to the knowledge base the assistant answers from (product docs, policies, pricing…).",
+		Description: "Add a text document to the knowledge base the assistant answers from (product docs, policies, pricing…), or with kind=instruction a topic playbook the assistant follows.",
 	}, func(ctx context.Context, in addDocumentInput) (any, error) {
 		return r.api.Do(ctx, http.MethodPost, "/api/v1/rag/documents/ingest", nil, in)
 	})

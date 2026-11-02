@@ -41,7 +41,16 @@ func newHarness(t *testing.T, opts Options) *harness {
 		h.mu.Lock()
 		h.calls = append(h.calls, recorded{r.Method, r.URL.RequestURI(), string(body)})
 		h.mu.Unlock()
-		_, _ = w.Write([]byte(`{"ok":true}`))
+		switch r.URL.Path {
+		case "/api/widgets":
+			_, _ = w.Write([]byte(`[]`))
+		case "/api/v1/rag/documents":
+			_, _ = w.Write([]byte(`[{"id":"a"},{"id":"b"}]`))
+		case "/api/v1/branding":
+			_, _ = w.Write([]byte(`{"aiAssistantName":"Nour","aiSystemPrompt":"Help Acme customers."}`))
+		default:
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		}
 	}))
 	t.Cleanup(api.Close)
 
@@ -53,8 +62,12 @@ func newHarness(t *testing.T, opts Options) *harness {
 		opts.WidgetHost = "https://chat.erghi.ai"
 	}
 	server := mcp.NewServer(&mcp.Implementation{Name: "test"}, nil)
+	if opts.AppURL == "" {
+		opts.AppURL = "https://app.test"
+	}
 	Register(server, client, opts)
-	RegisterPrompts(server)
+	RegisterChecklist(server, client, opts, nil)
+	RegisterPrompts(server, opts.AppURL)
 
 	ct, st := mcp.NewInMemoryTransports()
 	ctx := context.Background()
@@ -206,9 +219,37 @@ func TestPrompts(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := res.Messages[0].Content.(*mcp.TextContent).Text
-	for _, want := range []string{"Acme", "https://acme.test", "get_api_key_info", "confirm=true"} {
+	for _, want := range []string{"Acme", "https://acme.test", "get_setup_checklist", "https://app.test/users", "confirm=true"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("prompt missing %q", want)
 		}
+	}
+}
+
+func TestSetupChecklistMirrorsDashboard(t *testing.T) {
+	h := newHarness(t, Options{Scopes: []string{"configure_ai", "manage_widgets"}})
+	res, text := h.call(t, "get_setup_checklist", nil)
+	if res.IsError {
+		t.Fatal(text)
+	}
+	var c checklist
+	if err := json.Unmarshal([]byte(text), &c); err != nil {
+		t.Fatal(err)
+	}
+	status := map[string]string{}
+	for _, s := range c.Steps {
+		status[s.Key] = s.Status
+	}
+	want := map[string]string{
+		"assistant": "done", "knowledge": "done", "widget": "todo",
+		"teammate": "unknown", "conversation": "unknown",
+	}
+	for k, v := range want {
+		if status[k] != v {
+			t.Errorf("%s = %q, want %q", k, status[k], v)
+		}
+	}
+	if c.Done != 2 || c.Total != 5 || !strings.Contains(text, "https://app.test/users") {
+		t.Errorf("checklist = %+v", c)
 	}
 }

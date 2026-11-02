@@ -61,25 +61,39 @@ go install github.com/ErghiPlatform/erghi-mcp/cmd/erghi-mcp@latest
 
 Then use `erghi-mcp` as the command.
 
-## 3. Ask it to set things up
+## 3. Set up your workspace with a prompt
 
-These prompts walk the model through a setup step by step:
+Right after sign-up, the Erghi dashboard shows a **Get your assistant live** checklist. The `setup_erghi` prompt works through the same checklist from your MCP client, and `get_setup_checklist` reports where you are:
+
+| Dashboard step | How the MCP server does it | Scope needed |
+|---|---|---|
+| *(before the checklist)* Name the assistant and give it instructions | `update_branding` | `configure_ai` |
+| Add knowledge | `crawl_website`, `add_faq`, `add_knowledge_document`, then `test_assistant` | `configure_ai` |
+| Create a widget | `create_widget`, `get_widget_embed_code` | `manage_widgets` |
+| Invite a teammate | Not possible with a key (team members are human-only). The checklist links to the admin app. | n/a |
+| Get your first conversation | You send a message through the widget on your site; `get_setup_checklist` and `get_conversation` confirm it | `chat:read` |
+
+For a full setup, create a key with `configure_ai`, `manage_workspace_identity`, `manage_widgets` and `chat:read`.
+
+Prompts:
 
 | Prompt | What it does |
 |---|---|
-| `setup_erghi` | Full onboarding, in order: branding, assistant persona, knowledge base from your website, a test chat, widget, embed code |
+| `setup_erghi` | Works through the dashboard checklist end to end (arguments: `company`, `website`, `language`) |
 | `configure_ai_assistant` | Tune the persona, instructions, hand-off and model |
 | `build_knowledge_base` | Crawl a site, add documents and FAQs, find gaps |
 | `brand_widget` | Match the widget's look and messages to your brand |
 | `install_widget` | Create or choose a widget, restrict it to your domains, get the snippet |
 
-Or just ask, for example: *"Set up Erghi for https://acme.com, Arabic first, and give me the embed code."*
+Clients that don't support MCP prompts can paste the example prompts from [docs/example-prompts.md](docs/example-prompts.md). The shortest one:
+
+> Set up Erghi for Acme (https://acme.com, main language Arabic). Start with get_setup_checklist and work through every step that isn't done, checking with me before each change. Finish by showing me the checklist again.
 
 ## Tools
 
 | Area | Tools |
 |---|---|
-| Key | `get_api_key_info` |
+| Key and setup | `get_api_key_info`, `get_setup_checklist` |
 | AI | `get_ai_settings`, `list_available_models`, `update_ai_settings`, `get_ai_cost_usage` |
 | Knowledge base | `list_knowledge_documents`, `add_knowledge_document`, `add_faq`, `delete_knowledge_document`, `search_knowledge_base`, `crawl_website`, `get_crawl_job`, `cancel_crawl_job`, `schedule_website_crawl`, `list_crawl_schedules`, `disable_crawl_schedule`, `test_assistant` |
 | Branding & persona | `get_branding`, `update_branding` |
@@ -97,6 +111,7 @@ Or just ask, for example: *"Set up Erghi for https://acme.com, Arabic first, and
 | `ERGHI_CLIENT_SECRET` / `ERGHI_CLIENT_SECRET_FILE` | (none, required) | Secret, or a path to a file holding it (Docker/Kubernetes secrets) |
 | `ERGHI_API_URL` | `https://api.erghi.ai` | Must be `https` (plain `http` is accepted for `localhost` only) |
 | `ERGHI_WIDGET_HOST` | `https://chat.erghi.ai` | Used in embed snippets |
+| `ERGHI_APP_URL` | `https://app.erghi.ai` | Admin app, linked for steps a key can't do |
 | `ERGHI_MCP_READ_ONLY` | `false` | `true` offers only tools that change nothing |
 | `ERGHI_MCP_TRANSPORT` | `stdio` | `http` serves streamable HTTP at `/mcp` |
 | `ERGHI_MCP_HTTP_ADDR` | `127.0.0.1:8080` | Listen address in HTTP mode. Use `0.0.0.0:8080` inside a container. |

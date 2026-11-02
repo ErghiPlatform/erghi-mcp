@@ -25,9 +25,9 @@ var remoteScopes = map[string][]string{
 	"resolve_conversation": {"chat:write"},
 }
 
-// remote forwards calls to the MCP endpoint Erghi itself hosts at /api/mcp
+// Remote forwards calls to the MCP endpoint Erghi itself hosts at /api/mcp
 // (conversations, replies, billing plans), so one server exposes both.
-type remote struct {
+type Remote struct {
 	api      *erghi.Client
 	version  string
 	endpoint string
@@ -39,25 +39,26 @@ type remote struct {
 
 // RegisterRemote lists the tools Erghi's hosted MCP endpoint offers to this
 // key and re-registers each one on server as a forwarding tool. Failing to
-// reach it is not fatal: the native tools still work.
-func RegisterRemote(ctx context.Context, server *mcp.Server, api *erghi.Client, opts Options, version string) []string {
+// reach it is not fatal: the native tools still work, and the returned
+// Remote is nil.
+func RegisterRemote(ctx context.Context, server *mcp.Server, api *erghi.Client, opts Options, version string) ([]string, *Remote) {
 	log := opts.Logger
 	if log == nil {
 		log = slog.Default()
 	}
-	r := &remote{api: api, version: version, endpoint: api.BaseURL() + "/api/mcp", log: log}
+	r := &Remote{api: api, version: version, endpoint: api.BaseURL() + "/api/mcp", log: log}
 
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	session, err := r.connect(ctx)
 	if err != nil {
 		log.Warn("Erghi-hosted MCP tools unavailable; conversation tools are not offered", "error", err)
-		return nil
+		return nil, nil
 	}
 	list, err := session.ListTools(ctx, nil)
 	if err != nil {
 		log.Warn("could not list Erghi-hosted MCP tools", "error", err)
-		return nil
+		return nil, nil
 	}
 
 	var added []string
@@ -85,14 +86,14 @@ func RegisterRemote(ctx context.Context, server *mcp.Server, api *erghi.Client, 
 			if raw := req.Params.Arguments; len(raw) > 0 && string(raw) != "null" {
 				args = raw
 			}
-			return r.call(ctx, name, args), nil
+			return r.Call(ctx, name, args), nil
 		})
 		added = append(added, name)
 	}
-	return added
+	return added, r
 }
 
-func (r *remote) connect(ctx context.Context) (*mcp.ClientSession, error) {
+func (r *Remote) connect(ctx context.Context) (*mcp.ClientSession, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.session != nil {
@@ -116,7 +117,7 @@ func (r *remote) connect(ctx context.Context) (*mcp.ClientSession, error) {
 	return session, nil
 }
 
-func (r *remote) drop(stale *mcp.ClientSession) {
+func (r *Remote) drop(stale *mcp.ClientSession) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.session == stale {
@@ -125,9 +126,9 @@ func (r *remote) drop(stale *mcp.ClientSession) {
 	}
 }
 
-// call forwards one tool call, reconnecting once if the session went away
+// Call forwards one tool call, reconnecting once if the session went away
 // (for example after an Erghi deploy).
-func (r *remote) call(ctx context.Context, name string, args any) *mcp.CallToolResult {
+func (r *Remote) Call(ctx context.Context, name string, args any) *mcp.CallToolResult {
 	var lastErr error
 	for range 2 {
 		session, err := r.connect(ctx)

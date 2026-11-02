@@ -24,7 +24,9 @@ type Options struct {
 	Scopes []string
 	// WidgetHost serves widget.js, for embed snippets.
 	WidgetHost string
-	Logger     *slog.Logger
+	// AppURL is the admin app, linked for steps API keys can't do.
+	AppURL string
+	Logger *slog.Logger
 }
 
 type kind int

@@ -13,7 +13,7 @@ import (
 // the API's own validation.
 const safetyRules = `
 Ground rules:
-- Start with get_api_key_info. Only plan steps the key's scopes allow; if a step needs a scope the key lacks, say which one and that the user can create a key with it in the Erghi admin app (Settings → Agent API keys).
+- Start with get_api_key_info (and get_setup_checklist for a setup). Only plan steps the key's scopes allow; if a step needs a scope the key lacks, say which one and that the user can create a key with it in the Erghi admin app (Settings → Agent API keys).
 - Read the current state before changing it, and show the user what you are about to change.
 - Never invent secrets (bot tokens, webhook URLs, access tokens). Ask the user for them.
 - Only pass confirm=true after the user has explicitly agreed to that specific removal or disconnection.
@@ -23,7 +23,7 @@ Ground rules:
 type promptDef struct {
 	name, title, description string
 	args                     []*mcp.PromptArgument
-	body                     func(args map[string]string) string
+	body                     func(args map[string]string, appURL string) string
 }
 
 func arg(args map[string]string, name, fallback string) string {
@@ -36,25 +36,32 @@ func arg(args map[string]string, name, fallback string) string {
 var prompts = []promptDef{
 	{
 		name:        "setup_erghi",
-		title:       "Set up Erghi end to end",
-		description: "Guided setup of a workspace: assistant persona, knowledge base, branding, widget and embed code — without opening the admin app.",
+		title:       "Set up Erghi (dashboard checklist)",
+		description: "Takes a new workspace from sign-up to live: works through the dashboard's 'Get your assistant live' checklist (assistant, knowledge, widget, teammate, first conversation) without opening the admin app.",
 		args: []*mcp.PromptArgument{
 			{Name: "website", Description: "The company's website, e.g. https://example.com"},
 			{Name: "company", Description: "Company name"},
 			{Name: "language", Description: "Main language visitors use, e.g. en or ar"},
 		},
-		body: func(a map[string]string) string {
-			return fmt.Sprintf(`Help me set up Erghi, an AI customer-support chat, for %s (website: %s, main language: %s).
+		body: func(a map[string]string, app string) string {
+			return fmt.Sprintf(`Set up Erghi, an AI customer-support chat, for %s (website: %s, main language: %s), so that the "Get your assistant live" checklist on the Erghi dashboard is complete.
 
-Work through these steps in order, checking in with me between them:
-1. Workspace: call get_api_key_info and tell me which of the steps below this key can do.
-2. Branding: read get_branding, then propose company name, colours, widget theme/position and support/privacy/terms links (https only). Apply with update_branding once I agree.
-3. Assistant: propose an assistant name, tone, audience and short instructions for how it should answer, based on what the company does. Apply with update_branding. Then check get_ai_settings and list_available_models and suggest a model only if the current one is unsuitable.
-4. Knowledge base: start crawl_website on the website, poll get_crawl_job until it finishes, then list_knowledge_documents. Offer to add FAQs with add_faq for anything important that is missing.
-5. Test: ask test_assistant three realistic visitor questions (one in the main language) and show me the answers. Fix gaps by adding knowledge, not by stuffing the instructions.
-6. Widget: create_widget with allowedDomains set to the website's domain, then give me get_widget_embed_code and tell me where to paste it.
-7. Optional: offer to schedule a weekly re-crawl (schedule_website_crawl) and to connect Telegram/WhatsApp/Slack.
-%s`, arg(a, "company", "my company"), arg(a, "website", "(ask me)"), arg(a, "language", "(ask me)"), safetyRules)
+Start with get_api_key_info and get_setup_checklist. Show me the checklist, then work through the steps that are not done, in this order, checking in with me between them:
+
+1. Assistant. Read get_branding. Propose a company name, an assistant name, a tone and short instructions (who the assistant helps, what it should and shouldn't do, when to hand off to a person). Keep the instructions short: facts go in the knowledge base. Apply with update_branding once I agree. Also propose colours, widget theme/position and https support/privacy/terms links if they're missing.
+
+2. Add knowledge. Start crawl_website on the website and poll get_crawl_job until it finishes. Then list_knowledge_documents. Ask me about anything visitors will ask that the site doesn't cover (pricing, shipping, refunds, opening hours) and add it with add_faq or add_knowledge_document. Check the result with test_assistant: ask three realistic visitor questions, one of them in the main language. Fill gaps with knowledge, not by stuffing the instructions.
+
+3. Create a widget. Use list_widgets; if there's none, create_widget with allowedDomains set to the website's domain (and a welcome message in the main language). Give me get_widget_embed_code and tell me to paste it just before </body> on every page.
+
+4. Invite a teammate. API keys can't manage team members, so tell me to invite someone at %s/users who can take over when a visitor asks for a human.
+
+5. Get your first conversation. Ask me to open the website once the snippet is live and send a message through the widget. Then call get_setup_checklist again and, if it's there, get_conversation to show me how the assistant answered.
+
+Optional at the end: offer a weekly re-crawl (schedule_website_crawl) and connecting Telegram, WhatsApp or Slack.
+
+Finish with get_setup_checklist and a short summary: what's done, what's left, and links to the admin app (%s) for anything only a person can do.
+%s`, arg(a, "company", "my company"), arg(a, "website", "(ask me)"), arg(a, "language", "(ask me)"), app, app, safetyRules)
 		},
 	},
 	{
@@ -64,7 +71,7 @@ Work through these steps in order, checking in with me between them:
 		args: []*mcp.PromptArgument{
 			{Name: "goal", Description: "What should change, e.g. 'more concise, hand off billing questions'"},
 		},
-		body: func(a map[string]string) string {
+		body: func(a map[string]string, _ string) string {
 			return fmt.Sprintf(`Help me configure the Erghi assistant. Goal: %s.
 
 1. Read get_branding (assistant name, tone, audience, instructions, hand-off mode, escalation keywords) and get_ai_settings.
@@ -81,7 +88,7 @@ Work through these steps in order, checking in with me between them:
 		args: []*mcp.PromptArgument{
 			{Name: "website", Description: "Site or help-centre URL to crawl (optional)"},
 		},
-		body: func(a map[string]string) string {
+		body: func(a map[string]string, _ string) string {
 			return fmt.Sprintf(`Help me build the Erghi knowledge base.
 
 1. list_knowledge_documents to see what is already there.
@@ -99,7 +106,7 @@ Work through these steps in order, checking in with me between them:
 		args: []*mcp.PromptArgument{
 			{Name: "brand", Description: "Brand notes: colours, tone, website"},
 		},
-		body: func(a map[string]string) string {
+		body: func(a map[string]string, _ string) string {
 			return fmt.Sprintf(`Help me brand the Erghi chat widget. Brand notes: %s.
 
 1. Read get_branding and list_widgets / get_widget.
@@ -115,7 +122,7 @@ Work through these steps in order, checking in with me between them:
 		args: []*mcp.PromptArgument{
 			{Name: "domain", Description: "Domain that will embed the widget, e.g. example.com"},
 		},
-		body: func(a map[string]string) string {
+		body: func(a map[string]string, _ string) string {
 			return fmt.Sprintf(`Help me install the Erghi widget on %s.
 
 1. list_widgets. Reuse a suitable one or create_widget.
@@ -126,8 +133,9 @@ Work through these steps in order, checking in with me between them:
 	},
 }
 
-// RegisterPrompts adds the guided setup prompts.
-func RegisterPrompts(server *mcp.Server) {
+// RegisterPrompts adds the guided setup prompts. appURL is the admin app,
+// linked for the steps API keys can't do.
+func RegisterPrompts(server *mcp.Server, appURL string) {
 	for _, p := range prompts {
 		server.AddPrompt(&mcp.Prompt{
 			Name:        p.name,
@@ -139,7 +147,7 @@ func RegisterPrompts(server *mcp.Server) {
 				Description: p.description,
 				Messages: []*mcp.PromptMessage{{
 					Role:    "user",
-					Content: &mcp.TextContent{Text: p.body(req.Params.Arguments)},
+					Content: &mcp.TextContent{Text: p.body(req.Params.Arguments, appURL)},
 				}},
 			}, nil
 		})

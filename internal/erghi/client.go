@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"net/url"
@@ -209,12 +210,47 @@ func decodeClaims(token string) (TokenClaims, error) {
 // cached token was invalidated early.
 func (c *Client) Do(ctx context.Context, method, path string, query url.Values, body any) (json.RawMessage, error) {
 	var payload []byte
+	contentType := ""
 	if body != nil {
 		var err error
 		if payload, err = json.Marshal(body); err != nil {
 			return nil, err
 		}
+		contentType = "application/json"
 	}
+	return c.send(ctx, method, path, query, contentType, payload)
+}
+
+// File is one file part of a multipart request.
+type File struct {
+	Field, Name string
+	Content     []byte
+}
+
+// DoMultipart sends form fields and one file as multipart/form-data, for the
+// upload endpoints, and returns the raw JSON response body.
+func (c *Client) DoMultipart(ctx context.Context, method, path string, fields map[string]string, file File) (json.RawMessage, error) {
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	for k, v := range fields {
+		if err := w.WriteField(k, v); err != nil {
+			return nil, err
+		}
+	}
+	part, err := w.CreateFormFile(file.Field, file.Name)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := part.Write(file.Content); err != nil {
+		return nil, err
+	}
+	if err := w.Close(); err != nil {
+		return nil, err
+	}
+	return c.send(ctx, method, path, nil, w.FormDataContentType(), buf.Bytes())
+}
+
+func (c *Client) send(ctx context.Context, method, path string, query url.Values, contentType string, payload []byte) (json.RawMessage, error) {
 	for attempt := 0; ; attempt++ {
 		token, err := c.bearer(ctx, attempt > 0)
 		if err != nil {
@@ -235,8 +271,8 @@ func (c *Client) Do(ctx context.Context, method, path string, query url.Values, 
 		req.Header.Set("Authorization", "Bearer "+token)
 		req.Header.Set("Accept", "application/json")
 		req.Header.Set("User-Agent", c.userAgent)
-		if payload != nil {
-			req.Header.Set("Content-Type", "application/json")
+		if contentType != "" {
+			req.Header.Set("Content-Type", contentType)
 		}
 		resp, err := c.http.Do(req)
 		if err != nil {

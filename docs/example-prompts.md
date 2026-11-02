@@ -78,6 +78,38 @@ List my open Erghi conversations waiting for a human. For each, summarise what t
 and draft a reply. Don't send anything until I approve each one.
 ```
 
+## Analyse the product and plan the assistant
+
+Key scopes: `configure_ai`, `manage_workspace_identity`, `manage_widgets`, plus `manage_integrations` if there is an API. Or use the `analyze_product` prompt.
+
+```text
+Read get_erghi_guide how_replies_work and product_analysis, then run review_chat_setup.
+Study https://acme.com, its help centre and pricing page. Build a table of the questions our
+customers ask, grouped by intent, with where each answer comes from (knowledge base, our API,
+or a person) and whether Erghi covers it today. Then propose persona, knowledge, integrations,
+action policies and hand-off settings as one plan. Don't change anything until I approve it.
+```
+
+## Connect the product's API
+
+Key scope: `manage_integrations` (and `configure_ai` for policies). Or use the `connect_integration` prompt.
+
+```text
+Here is our OpenAPI document: <paste or path>. Read get_erghi_guide integrations and policies.
+List the operations with who each acts for and whether it changes data, and recommend which
+ones customers' assistant should get. After I agree, add the integration, bind every user id
+to {{identity.sub}}, write AI instructions for each endpoint, and add action policies for
+anything personal or data-changing. Tell me when I need to add credentials in the admin app.
+```
+
+## Review everything that affects chat
+
+```text
+Run review_chat_setup and explain each finding in plain words, most serious first. For each
+one, show the exact change you'd make, and make it only after I say yes. Then ask
+test_assistant one question that tries to get another customer's data and show me what happens.
+```
+
 ## Read-only audit
 
 Run the server with `ERGHI_MCP_READ_ONLY=true` and a key with `view_audit_logs` (plus any read scopes).
@@ -89,4 +121,4 @@ done by an API key rather than a person.
 
 ## What a key can't do
 
-Billing and plan changes, inviting team members and changing roles, OpenAPI integrations, logo upload, custom domains and account deletion stay in the admin app at https://app.erghi.ai. The model will point you there.
+Billing and plan changes, inviting team members and changing roles, integration credentials, the widget identity secret, API keys, logo upload, custom domains and account deletion stay in the admin app at https://app.erghi.ai. The model will point you there.

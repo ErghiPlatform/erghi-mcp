@@ -26,13 +26,18 @@ The server only offers tools the key's scopes allow. The API checks every scope 
 
 ### Claude Code
 
+Replace `YOUR_CLIENT_ID` and `YOUR_CLIENT_SECRET` with the full values from step 1:
+
 ```bash
-claude mcp add erghi -- docker run -i --rm \
-  -e ERGHI_CLIENT_ID -e ERGHI_CLIENT_SECRET \
+claude mcp add erghi \
+  -e ERGHI_CLIENT_ID=YOUR_CLIENT_ID -e ERGHI_CLIENT_SECRET=YOUR_CLIENT_SECRET \
+  -- docker run -i --rm -e ERGHI_CLIENT_ID -e ERGHI_CLIENT_SECRET \
   ghcr.io/erghiplatform/erghi-mcp:latest
 ```
 
-Export `ERGHI_CLIENT_ID` and `ERGHI_CLIENT_SECRET` in the shell that starts Claude Code. `-e NAME` with no value passes the variable through without writing the secret into the config file.
+The `-e` options before `--` store the key in Claude Code's config (`~/.claude.json`); the bare `-e NAME` options after it hand those values to the container. Then run `claude mcp list` and check that `erghi` shows **Connected**.
+
+If you only ever start Claude Code from a terminal, you can leave out the first pair of `-e` options and `export ERGHI_CLIENT_ID=… ERGHI_CLIENT_SECRET=…` in that shell instead, so the secret isn't written to the config. Claude Code started from the desktop app doesn't see your shell's variables, so use the form above there.
 
 ### Claude Desktop / Cursor / any stdio client
 
@@ -45,13 +50,25 @@ Export `ERGHI_CLIENT_ID` and `ERGHI_CLIENT_SECRET` in the shell that starts Clau
                "-e", "ERGHI_CLIENT_ID", "-e", "ERGHI_CLIENT_SECRET",
                "ghcr.io/erghiplatform/erghi-mcp:latest"],
       "env": {
-        "ERGHI_CLIENT_ID": "cf_client_live_…",
-        "ERGHI_CLIENT_SECRET": "…"
+        "ERGHI_CLIENT_ID": "YOUR_CLIENT_ID",
+        "ERGHI_CLIENT_SECRET": "YOUR_CLIENT_SECRET"
       }
     }
   }
 }
 ```
+
+### Podman instead of Docker
+
+Use Podman's full path as the command, for example `/opt/podman/bin/podman` (macOS installer) or `/usr/bin/podman` (Linux); `which podman` prints it. The arguments stay the same. A shell alias such as `alias docker=podman` doesn't work: MCP clients start the server without your shell, so they never see the alias.
+
+### If it doesn't connect
+
+- **`Executable not found in $PATH: "docker"`**: the client can't find Docker. Use the full path to `docker` (`which docker`) or Podman (above) as the command.
+- **`401 (invalid_client)` in the server log, or "Connection closed"**: the client ID or secret is wrong, incomplete or still the placeholder, or the key was revoked or has expired. The secret is shown only once; if you don't have it, revoke the key and create a new one.
+- **Variables are empty**: the client started the server without the key. Put the key in the server's config (`-e` before `--` for Claude Code, `env` in the JSON) rather than in your shell.
+
+To see the server's own error, run the same command in a terminal with the two variables set; it prints why it stopped.
 
 ### Without Docker
 

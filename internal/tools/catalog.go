@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -320,6 +321,24 @@ type setPolicyActiveInput struct {
 	IsActive bool   `json:"isActive"`
 }
 
+type policyStatsInput struct {
+	Days int `json:"days,omitempty" jsonschema:"Window in days, 1 to 90 (default 7)"`
+}
+
+type policyTestCompletion struct {
+	Key    string `json:"key" jsonschema:"Step key to treat as completed"`
+	Target string `json:"target,omitempty" jsonschema:"For a step with a target: the value it was completed for (e.g. the order id looked up)"`
+}
+
+type testPolicyInput struct {
+	OperationID      string                 `json:"operationId" jsonschema:"The protected operation to try"`
+	Arguments        map[string]any         `json:"arguments,omitempty" jsonschema:"The call's arguments, as the model would send them"`
+	IdentityVerified bool                   `json:"identityVerified,omitempty" jsonschema:"Assume the visitor is signed in to the customer's app (a signed identity token)"`
+	Identity         map[string]any         `json:"identity,omitempty" jsonschema:"Verified identity claims to assume, e.g. {\"sub\": \"user-1\"}"`
+	Metadata         map[string]any         `json:"metadata,omitempty" jsonschema:"Conversation metadata to assume"`
+	CompletedSteps   []policyTestCompletion `json:"completedSteps,omitempty" jsonschema:"Steps to treat as already done in the chat (at most 50)"`
+}
+
 type deletePolicyInput struct {
 	PolicyID string `json:"policyId"`
 	Confirm  bool   `json:"confirm" jsonschema:"Must be true. Only set it after the user has explicitly agreed."`
@@ -348,6 +367,31 @@ func registerPolicies(r *registry) {
 			return nil, err
 		}
 		return r.api.Do(ctx, http.MethodGet, base+"/"+pid, nil, nil)
+	})
+	add(r, read, needAI, &mcp.Tool{
+		Name:        "get_action_policy_stats",
+		Description: "Allowed and refused protected calls per action policy over the last days, with refusals broken down by the step that refused them. A step that refuses almost everything is often misconfigured (a successWhen path that never matches, a target the prerequisite never carries).",
+	}, func(ctx context.Context, in policyStatsInput) (any, error) {
+		days := in.Days
+		if days == 0 {
+			days = 7
+		}
+		if days < 1 || days > 90 {
+			return nil, fmt.Errorf("days must be between 1 and 90")
+		}
+		return r.api.Do(ctx, http.MethodGet, base+"/stats", url.Values{"days": {strconv.Itoa(days)}}, nil)
+	})
+	add(r, read, needAI, &mcp.Tool{
+		Name:        "test_action_policy",
+		Description: "Dry-run the policy gate: what the workspace's active policies would decide for one protected call, given the identity, metadata and completed steps you describe. Nothing is called, changed or audited. Use it after create_action_policy or update_action_policy to check the policy refuses and allows what you meant.",
+	}, func(ctx context.Context, in testPolicyInput) (any, error) {
+		if strings.TrimSpace(in.OperationID) == "" {
+			return nil, fmt.Errorf("operationId is required")
+		}
+		if len(in.CompletedSteps) > 50 {
+			return nil, fmt.Errorf("completedSteps can list at most 50 steps")
+		}
+		return r.api.Do(ctx, http.MethodPost, base+"/test", nil, in)
 	})
 	add(r, write, needAI, &mcp.Tool{
 		Name:        "create_action_policy",

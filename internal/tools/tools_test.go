@@ -460,3 +460,43 @@ func TestPolicyToolsAcceptAPolicyObject(t *testing.T) {
 		t.Errorf("update sent %s %s", got[1].method, got[1].path)
 	}
 }
+
+func TestPolicyStatsAndDryRun(t *testing.T) {
+	h := newHarness(t, Options{ReadOnly: true, Scopes: []string{"configure_ai"}})
+	names := h.toolNames(t)
+	for _, want := range []string{"get_action_policy_stats", "test_action_policy"} {
+		if !slices.Contains(names, want) {
+			t.Errorf("%s not offered to a read-only configure_ai key", want)
+		}
+	}
+	if res, text := h.call(t, "get_action_policy_stats", map[string]any{}); res.IsError {
+		t.Fatalf("stats refused: %s", text)
+	}
+	if res, _ := h.call(t, "get_action_policy_stats", map[string]any{"days": 91}); !res.IsError {
+		t.Error("days=91 should be refused")
+	}
+	if res, _ := h.call(t, "test_action_policy", map[string]any{"operationId": " "}); !res.IsError {
+		t.Error("a test without an operation id should be refused")
+	}
+	args := map[string]any{
+		"operationId":      "refundOrder",
+		"arguments":        map[string]any{"order_id": "1042"},
+		"identityVerified": true,
+		"completedSteps":   []map[string]any{{"key": "looked_up_order", "target": "1042"}},
+	}
+	if res, text := h.call(t, "test_action_policy", args); res.IsError {
+		t.Fatalf("test refused: %s", text)
+	}
+	got := h.recorded()
+	if len(got) != 2 {
+		t.Fatalf("recorded %d calls, want 2", len(got))
+	}
+	if got[0].method != http.MethodGet || got[0].path != "/api/v1/admin/action-policies/stats?days=7" {
+		t.Errorf("stats sent %s %s", got[0].method, got[0].path)
+	}
+	if got[1].method != http.MethodPost || got[1].path != "/api/v1/admin/action-policies/test" ||
+		!strings.Contains(got[1].body, `"completedSteps":[{"key":"looked_up_order","target":"1042"}]`) ||
+		!strings.Contains(got[1].body, `"identityVerified":true`) {
+		t.Errorf("test sent %s %s %s", got[1].method, got[1].path, got[1].body)
+	}
+}

@@ -19,6 +19,12 @@ A refused call reports the pending step to the model, which explains it to the v
 
 `update_action_policy` replaces the whole definition: send every field you want to keep.
 
+Before the first call, the model is told which of its tools are protected and what each needs (a line appended to the tool description), so it can do the steps first instead of learning from a refusal. A refusal reaches it as Erghi's own text, saying the call was not made.
+
+## Checking a policy
+- `test_action_policy` dry-runs the gate for one call: pass `operationId`, the `arguments`, and the state to assume (`identityVerified`, `identity`, `metadata`, `completedSteps: [{ "key": "...", "target": "1042" }]`). It returns `allowed`, the `pendingStepKey` and the `message` the model would get, and the `policyKeys` that covered the call. It uses the active policies and changes nothing. Test both sides: the call with every step done (allowed), and without each one (refused at that step).
+- `get_action_policy_stats` (`days`, default 7) counts allowed and refused calls per policy from the audit log, with refusals by step. A step that refuses nearly every call usually has a `successWhen` path that never matches or a `target` the prerequisite never carries.
+
 ## Recommended baseline
 | Endpoint kind | Policy |
 |---|---|

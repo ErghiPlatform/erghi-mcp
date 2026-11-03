@@ -55,7 +55,7 @@ func newHarness(t *testing.T, opts Options) *harness {
 				_, _ = w.Write([]byte(`{"ok":true}`))
 			}
 		case "/api/v1/admin/action-policies":
-			_, _ = w.Write([]byte(`[]`))
+			_, _ = w.Write([]byte(policiesFixture))
 		default:
 			_, _ = w.Write([]byte(`{"ok":true}`))
 		}
@@ -360,6 +360,12 @@ func TestReviewFindsIntegrationRisks(t *testing.T) {
 	if !has("medium", "cancelOrder") {
 		t.Error("unprotected write not flagged")
 	}
+	if !has("high", `Step "verify_otp" can never complete`) {
+		t.Error("a step with no usable prerequisite not flagged")
+	}
+	if has("high", `Step "verify_customer"`) {
+		t.Error("a completable step was flagged")
+	}
 	if has("high", `"id"`) {
 		t.Error("a plain resource id was flagged as a user id")
 	}
@@ -398,5 +404,51 @@ func TestAnalyzeProductPrompt(t *testing.T) {
 		if !strings.Contains(text, want) {
 			t.Errorf("prompt missing %q", want)
 		}
+	}
+}
+
+// One step that can complete (cancelOrder is an active operation the policy does not protect)
+// and one that can't: its only prerequisite is not offered by any integration.
+const policiesFixture = `[
+  {"id": "p1", "policyKey": "orders_guard", "name": "Orders guard", "isActive": true,
+   "protectedOperations": ["getOrders"],
+   "requiredSteps": [
+     {"key": "verify_customer", "prerequisiteOperationIds": ["cancelOrder"]},
+     {"key": "verify_otp", "prerequisiteOperationIds": ["verifyOtp"]}
+   ]}
+]`
+
+// The policy tools used to take json.RawMessage, whose inferred schema is "null or array",
+// so the SDK refused every policy object before the call reached Erghi.
+func TestPolicyToolsAcceptAPolicyObject(t *testing.T) {
+	h := newHarness(t, Options{Scopes: []string{"configure_ai"}})
+	policy := map[string]any{
+		"policyKey":           "refund_guard",
+		"name":                "Refund guard",
+		"protectedOperations": []string{"refundOrder"},
+		"requiredSteps": []map[string]any{
+			{"key": "verify_customer", "blockMessage": "Verify first.", "prerequisiteOperationIds": []string{"verifyCustomer"}},
+		},
+	}
+	if res, text := h.call(t, "create_action_policy", map[string]any{"policy": policy}); res.IsError {
+		t.Fatalf("create refused: %s", text)
+	}
+	pid := "3f1c2b9a-7d4e-4a8b-9c1d-2e3f4a5b6c7d"
+	if res, text := h.call(t, "update_action_policy", map[string]any{"policyId": pid, "policy": policy}); res.IsError {
+		t.Fatalf("update refused: %s", text)
+	}
+	if res, _ := h.call(t, "update_action_policy", map[string]any{"policyId": pid}); !res.IsError {
+		t.Error("update without a policy should be refused")
+	}
+	got := h.recorded()
+	if len(got) != 2 {
+		t.Fatalf("recorded %d calls, want 2", len(got))
+	}
+	if got[0].method != http.MethodPost || got[0].path != "/api/v1/admin/action-policies" ||
+		!strings.Contains(got[0].body, `"protectedOperations":["refundOrder"]`) {
+		t.Errorf("create sent %s %s %s", got[0].method, got[0].path, got[0].body)
+	}
+	if got[1].method != http.MethodPut || got[1].path != "/api/v1/admin/action-policies/"+pid {
+		t.Errorf("update sent %s %s", got[1].method, got[1].path)
 	}
 }

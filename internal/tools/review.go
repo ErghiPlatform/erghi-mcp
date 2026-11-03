@@ -48,8 +48,9 @@ type actionPolicy struct {
 	IsActive                bool     `json:"isActive"`
 	RequireVerifiedIdentity bool     `json:"requireVerifiedIdentity"`
 	RequiredSteps           []struct {
-		Key                      string   `json:"key"`
-		PrerequisiteOperationIDs []string `json:"prerequisiteOperationIds"`
+		Key                      string           `json:"key"`
+		PrerequisiteOperationIDs []string         `json:"prerequisiteOperationIds"`
+		SuccessWhen              *json.RawMessage `json:"successWhen"`
 	} `json:"requiredSteps"`
 	ArgumentRules []struct {
 		Argument string `json:"argument"`
@@ -300,6 +301,9 @@ func reviewIntegrations(integrations []integrationSummary, policies []actionPoli
 				if !completable {
 					addF("high", "policy "+p.Name, fmt.Sprintf("Step %q can never complete: none of its prerequisites is an active operation outside the policy, so every protected call is refused.", step.Key),
 						"update_action_policy with a verification operation from list_protected_operations as the step's prerequisite, or remove the step.")
+				} else if step.SuccessWhen == nil || string(*step.SuccessWhen) == "null" {
+					addF("low", "policy "+p.Name, fmt.Sprintf("Step %q completes on any successful HTTP response, even one whose body says verification failed (e.g. 200 {\"verified\": false}).", step.Key),
+						`If the prerequisite reports failure in its body, add "successWhen": {"path": "verified", "equals": "true"} to the step.`)
 				}
 			}
 		}

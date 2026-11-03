@@ -117,7 +117,7 @@ Clients that don't support MCP prompts can paste the example prompts from [docs/
 | AI | `get_ai_settings`, `list_available_models`, `update_ai_settings`, `get_ai_cost_usage` |
 | Knowledge base | `list_knowledge_documents`, `add_knowledge_document`, `add_faq`, `delete_knowledge_document`, `search_knowledge_base`, `crawl_website`, `get_crawl_job`, `cancel_crawl_job`, `schedule_website_crawl`, `list_crawl_schedules`, `disable_crawl_schedule`, `test_assistant` |
 | Branding & persona | `get_branding`, `update_branding` |
-| Action policies | `list_action_policies`, `list_protected_operations`, `get_action_policy`, `create_action_policy`, `update_action_policy`, `set_action_policy_active`, `delete_action_policy` |
+| Action policies | `list_action_policies`, `list_protected_operations`, `get_action_policy`, `get_action_policy_stats`, `test_action_policy`, `create_action_policy`, `update_action_policy`, `set_action_policy_active`, `delete_action_policy` |
 | Channels | `get_channel_status`, `connect_telegram`, `connect_slack`, `connect_whatsapp`, `disconnect_channel` |
 | Widgets | `list_widgets`, `get_widget`, `create_widget`, `update_widget`, `deactivate_widget`, `get_widget_embed_code` |
 | Integrations | `list_integrations`, `get_integration`, `add_integration_from_openapi`, `replace_integration_spec`, `refresh_integration_endpoints`, `update_integration_base_url`, `set_integration_tool_context`, `set_integration_active`, `test_integration_endpoint`, `delete_integration` |

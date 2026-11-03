@@ -351,7 +351,7 @@ func registerPolicies(r *registry) {
 	})
 	add(r, write, needAI, &mcp.Tool{
 		Name:        "create_action_policy",
-		Description: "Create an action policy.",
+		Description: "Create an action policy: a hard limit Erghi checks before a protected integration call runs. Read get_erghi_guide topic policies first and take operation ids from list_protected_operations.",
 	}, func(ctx context.Context, in policyBody) (any, error) {
 		if len(in.Policy) == 0 {
 			return nil, fmt.Errorf("policy is required")
@@ -360,7 +360,7 @@ func registerPolicies(r *registry) {
 	})
 	add(r, write, needAI, &mcp.Tool{
 		Name:        "update_action_policy",
-		Description: "Replace an action policy's definition.",
+		Description: "Replace an action policy's whole definition (not a patch): read it with get_action_policy and send every field you want to keep.",
 	}, func(ctx context.Context, in updatePolicyInput) (any, error) {
 		if len(in.Policy) == 0 {
 			return nil, fmt.Errorf("policy is required")

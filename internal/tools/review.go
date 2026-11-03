@@ -47,8 +47,11 @@ type actionPolicy struct {
 	ProtectedOperations     []string `json:"protectedOperations"`
 	IsActive                bool     `json:"isActive"`
 	RequireVerifiedIdentity bool     `json:"requireVerifiedIdentity"`
-	RequiredSteps           []any    `json:"requiredSteps"`
-	ArgumentRules           []struct {
+	RequiredSteps           []struct {
+		Key                      string   `json:"key"`
+		PrerequisiteOperationIDs []string `json:"prerequisiteOperationIds"`
+	} `json:"requiredSteps"`
+	ArgumentRules []struct {
 		Argument string `json:"argument"`
 		Equals   string `json:"equals"`
 	} `json:"argumentRules"`
@@ -266,7 +269,7 @@ func reviewIntegrations(integrations []integrationSummary, policies []actionPoli
 			}
 			if policiesKnown && !strings.EqualFold(ep.Method, http.MethodGet) && len(protectedBy[ep.OperationID]) == 0 {
 				addF("medium", epArea, "This call can change data and no active action policy protects it.",
-					"create_action_policy protecting it, e.g. requireVerifiedIdentity, a confirmation step, or argumentRules.")
+					"create_action_policy protecting it, e.g. requireVerifiedIdentity, argumentRules, or a step completed by a verification operation.")
 			}
 		}
 		if !anyInstructions && len(in.Endpoints) > 0 {
@@ -282,6 +285,21 @@ func reviewIntegrations(integrations []integrationSummary, policies []actionPoli
 				if !knownOps[op] && p.IsActive {
 					addF("low", "policy "+p.Name, fmt.Sprintf("Protects %q, which no active integration has.", op),
 						"Fix the operation id (list_protected_operations) or remove it from the policy.")
+				}
+			}
+			if !p.IsActive {
+				continue
+			}
+			for _, step := range p.RequiredSteps {
+				completable := false
+				for _, op := range step.PrerequisiteOperationIDs {
+					if knownOps[op] && !slices.Contains(p.ProtectedOperations, op) {
+						completable = true
+					}
+				}
+				if !completable {
+					addF("high", "policy "+p.Name, fmt.Sprintf("Step %q can never complete: none of its prerequisites is an active operation outside the policy, so every protected call is refused.", step.Key),
+						"update_action_policy with a verification operation from list_protected_operations as the step's prerequisite, or remove the step.")
 				}
 			}
 		}

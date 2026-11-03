@@ -55,7 +55,7 @@ func newHarness(t *testing.T, opts Options) *harness {
 				_, _ = w.Write([]byte(`{"ok":true}`))
 			}
 		case "/api/v1/admin/action-policies":
-			_, _ = w.Write([]byte(`[]`))
+			_, _ = w.Write([]byte(policiesFixture))
 		default:
 			_, _ = w.Write([]byte(`{"ok":true}`))
 		}
@@ -360,6 +360,12 @@ func TestReviewFindsIntegrationRisks(t *testing.T) {
 	if !has("medium", "cancelOrder") {
 		t.Error("unprotected write not flagged")
 	}
+	if !has("high", `Step "verify_otp" can never complete`) {
+		t.Error("a step with no usable prerequisite not flagged")
+	}
+	if has("high", `Step "verify_customer"`) {
+		t.Error("a completable step was flagged")
+	}
 	if has("high", `"id"`) {
 		t.Error("a plain resource id was flagged as a user id")
 	}
@@ -400,6 +406,17 @@ func TestAnalyzeProductPrompt(t *testing.T) {
 		}
 	}
 }
+
+// One step that can complete (cancelOrder is an active operation the policy does not protect)
+// and one that can't: its only prerequisite is not offered by any integration.
+const policiesFixture = `[
+  {"id": "p1", "policyKey": "orders_guard", "name": "Orders guard", "isActive": true,
+   "protectedOperations": ["getOrders"],
+   "requiredSteps": [
+     {"key": "verify_customer", "prerequisiteOperationIds": ["cancelOrder"]},
+     {"key": "verify_otp", "prerequisiteOperationIds": ["verifyOtp"]}
+   ]}
+]`
 
 // The policy tools used to take json.RawMessage, whose inferred schema is "null or array",
 // so the SDK refused every policy object before the call reached Erghi.

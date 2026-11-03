@@ -366,6 +366,12 @@ func TestReviewFindsIntegrationRisks(t *testing.T) {
 	if has("high", `Step "verify_customer"`) {
 		t.Error("a completable step was flagged")
 	}
+	if !has("low", `Step "verify_customer" completes on any successful`) {
+		t.Error("a step with no response check not flagged")
+	}
+	if has("low", `Step "checked_customer"`) {
+		t.Error("a step with a response check was flagged")
+	}
 	if has("high", `"id"`) {
 		t.Error("a plain resource id was flagged as a user id")
 	}
@@ -414,7 +420,9 @@ const policiesFixture = `[
    "protectedOperations": ["getOrders"],
    "requiredSteps": [
      {"key": "verify_customer", "prerequisiteOperationIds": ["cancelOrder"]},
-     {"key": "verify_otp", "prerequisiteOperationIds": ["verifyOtp"]}
+     {"key": "verify_otp", "prerequisiteOperationIds": ["verifyOtp"]},
+     {"key": "checked_customer", "prerequisiteOperationIds": ["cancelOrder"],
+      "successWhen": {"path": "verified", "equals": "true"}}
    ]}
 ]`
 

@@ -307,7 +307,7 @@ type policyIDInput struct {
 // []byte, so the inferred schema only accepted null or an array and every real policy
 // object was refused before it reached the API.
 type policyBody struct {
-	Policy map[string]any `json:"policy" jsonschema:"Policy object: policyKey (create only), name, description, protectedOperations[], requiredSteps[] (each needs prerequisiteOperationIds), isActive (create only), requireVerifiedIdentity, argumentRules[]. Operation ids must come from list_protected_operations."`
+	Policy map[string]any `json:"policy" jsonschema:"Policy object: policyKey (create only), name, description, protectedOperations[], requiredSteps[] (each needs prerequisiteOperationIds; optional successWhen{path,equals}, target{argument,from}, validForMinutes, singleUse; see the policies guide), isActive (create only), requireVerifiedIdentity, argumentRules[]. Operation ids must come from list_protected_operations."`
 }
 
 type updatePolicyInput struct {

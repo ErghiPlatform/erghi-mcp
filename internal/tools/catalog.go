@@ -83,7 +83,7 @@ func registerAI(r *registry) {
 	})
 	add(r, read, needAI, &mcp.Tool{
 		Name:        "list_available_models",
-		Description: "List the AI models this workspace's plan can use, with their providers.",
+		Description: "List the AI models this workspace's plan can use, with their providers. Models the provider is about to shut down are hidden, and retired ones are removed.",
 	}, func(ctx context.Context, _ empty) (any, error) {
 		return r.api.Do(ctx, http.MethodGet, "/api/v1/ai-settings/available-models", nil, nil)
 	})
@@ -95,7 +95,7 @@ func registerAI(r *registry) {
 	})
 	add(r, read, needAI, &mcp.Tool{
 		Name:        "get_ai_cost_usage",
-		Description: "AI spend for the workspace over a recent window.",
+		Description: "AI spend for the workspace over a recent window: calls, tokens and cost, plus caching savings. promptCacheHitRate is the share of input tokens the provider served from its cache; cacheHitRate is the share of replies answered from Erghi's own response cache. savedCostUsd is the total saved by both, and costWithoutSavingsUsd is what the spend would have been without them.",
 	}, func(ctx context.Context, in costUsageInput) (any, error) {
 		days := in.SinceDays
 		if days <= 0 {

@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -304,13 +303,16 @@ type policyIDInput struct {
 	PolicyID string `json:"policyId"`
 }
 
+// The policy is passed through as an object. It must not be json.RawMessage: that is a
+// []byte, so the inferred schema only accepted null or an array and every real policy
+// object was refused before it reached the API.
 type policyBody struct {
-	Policy json.RawMessage `json:"policy" jsonschema:"Policy object: policyKey (create only), name, description, protectedOperations[], requiredSteps[], isActive (create only), requireVerifiedIdentity, argumentRules[]. See list_protected_operations for operation ids."`
+	Policy map[string]any `json:"policy" jsonschema:"Policy object: policyKey (create only), name, description, protectedOperations[], requiredSteps[] (each needs prerequisiteOperationIds), isActive (create only), requireVerifiedIdentity, argumentRules[]. Operation ids must come from list_protected_operations."`
 }
 
 type updatePolicyInput struct {
-	PolicyID string          `json:"policyId"`
-	Policy   json.RawMessage `json:"policy" jsonschema:"name, description, protectedOperations[], requiredSteps[], requireVerifiedIdentity, argumentRules[]"`
+	PolicyID string         `json:"policyId"`
+	Policy   map[string]any `json:"policy" jsonschema:"The whole new definition (not a patch): name, description, protectedOperations[], requiredSteps[], requireVerifiedIdentity, argumentRules[]"`
 }
 
 type setPolicyActiveInput struct {
@@ -360,6 +362,9 @@ func registerPolicies(r *registry) {
 		Name:        "update_action_policy",
 		Description: "Replace an action policy's definition.",
 	}, func(ctx context.Context, in updatePolicyInput) (any, error) {
+		if len(in.Policy) == 0 {
+			return nil, fmt.Errorf("policy is required")
+		}
 		pid, err := id("policyId", in.PolicyID)
 		if err != nil {
 			return nil, err

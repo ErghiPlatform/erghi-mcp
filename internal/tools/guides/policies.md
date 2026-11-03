@@ -4,13 +4,15 @@ Instructions are advice the model may be talked out of. A policy is checked by E
 
 A policy (`create_action_policy`) has:
 - `policyKey` (create only, stable id), `name`, `description`, `isActive`.
-- `protectedOperations`: operation ids from `list_protected_operations`.
+- `protectedOperations`: operation ids from `list_protected_operations`. An id no active integration offers is refused (a typo would protect nothing).
 - At least one of:
-  - `requiredSteps`: `[{ "key": "...", "blockMessage": "...", "prerequisiteOperationIds": ["verifyOtp"] }]`. One of the listed operations must have succeeded earlier in the conversation. The block message tells the model what to do instead.
+  - `requiredSteps`: `[{ "key": "...", "blockMessage": "...", "prerequisiteOperationIds": ["verifyOtp"] }]`. One of the listed operations must have succeeded earlier in the conversation (in any visitor turn, for 24 hours). Each step needs at least one prerequisite, step keys must differ, and a prerequisite cannot be one of the protected operations. The block message tells the model what to do instead.
   - `requireVerifiedIdentity: true`: refused unless the conversation has a verified identity (signed identity token).
   - `argumentRules`: `[{ "argument": "user_id", "equals": "{{identity.sub}}" }]`. `argument` can be a dotted body path (`transfer.user_id`). `equals` can use `identity.*`, `metadata.*`, `conversation.id`, never `secret.*`. A missing argument or unresolvable template refuses the call.
 
-A refused call reports the pending step to the model, which explains it to the visitor.
+A refused call reports the pending step to the model, which explains it to the visitor. Every call a policy covers, allowed or refused, is written to the audit log (`security.policy_tool_allowed` / `security.policy_tool_blocked`, see `list_audit_logs`), and policy updates record the definition before and after.
+
+`update_action_policy` replaces the whole definition: send every field you want to keep.
 
 ## Recommended baseline
 | Endpoint kind | Policy |

@@ -400,3 +400,38 @@ func TestAnalyzeProductPrompt(t *testing.T) {
 		}
 	}
 }
+
+// The policy tools used to take json.RawMessage, whose inferred schema is "null or array",
+// so the SDK refused every policy object before the call reached Erghi.
+func TestPolicyToolsAcceptAPolicyObject(t *testing.T) {
+	h := newHarness(t, Options{Scopes: []string{"configure_ai"}})
+	policy := map[string]any{
+		"policyKey":           "refund_guard",
+		"name":                "Refund guard",
+		"protectedOperations": []string{"refundOrder"},
+		"requiredSteps": []map[string]any{
+			{"key": "verify_customer", "blockMessage": "Verify first.", "prerequisiteOperationIds": []string{"verifyCustomer"}},
+		},
+	}
+	if res, text := h.call(t, "create_action_policy", map[string]any{"policy": policy}); res.IsError {
+		t.Fatalf("create refused: %s", text)
+	}
+	pid := "3f1c2b9a-7d4e-4a8b-9c1d-2e3f4a5b6c7d"
+	if res, text := h.call(t, "update_action_policy", map[string]any{"policyId": pid, "policy": policy}); res.IsError {
+		t.Fatalf("update refused: %s", text)
+	}
+	if res, _ := h.call(t, "update_action_policy", map[string]any{"policyId": pid}); !res.IsError {
+		t.Error("update without a policy should be refused")
+	}
+	got := h.recorded()
+	if len(got) != 2 {
+		t.Fatalf("recorded %d calls, want 2", len(got))
+	}
+	if got[0].method != http.MethodPost || got[0].path != "/api/v1/admin/action-policies" ||
+		!strings.Contains(got[0].body, `"protectedOperations":["refundOrder"]`) {
+		t.Errorf("create sent %s %s %s", got[0].method, got[0].path, got[0].body)
+	}
+	if got[1].method != http.MethodPut || got[1].path != "/api/v1/admin/action-policies/"+pid {
+		t.Errorf("update sent %s %s", got[1].method, got[1].path)
+	}
+}

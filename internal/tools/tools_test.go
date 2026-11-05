@@ -281,7 +281,7 @@ const integrationsFixture = `[{
 
 func TestIntegrationToolsFollowTheirScope(t *testing.T) {
 	names := newHarness(t, Options{Scopes: []string{"manage_integrations"}}).toolNames(t)
-	for _, want := range []string{"list_integrations", "add_integration_from_openapi", "set_integration_tool_context", "test_integration_endpoint", "delete_integration", "review_chat_setup", "get_erghi_guide"} {
+	for _, want := range []string{"list_integrations", "add_integration_from_openapi", "set_integration_tool_context", "set_endpoint_timeout", "test_integration_endpoint", "delete_integration", "review_chat_setup", "get_erghi_guide"} {
 		if !slices.Contains(names, want) {
 			t.Errorf("missing %s", want)
 		}
@@ -317,6 +317,47 @@ func TestToolContextTargetsTheEndpoint(t *testing.T) {
 		got[0].path != "/api/v1/integrations/"+integrationID+"/endpoints/"+endpointID+"/tool-context" ||
 		got[0].body != `{"aiInstructions":null,"requestBindings":[]}` {
 		t.Fatalf("tool context call = %v", got)
+	}
+}
+
+func TestEndpointTimeoutByOperationID(t *testing.T) {
+	h := newHarness(t, Options{Scopes: []string{"manage_integrations"}})
+	res, text := h.call(t, "set_endpoint_timeout", map[string]any{"integrationId": integrationID, "operationId": "cancelOrder", "timeoutSeconds": 45})
+	if res.IsError {
+		t.Fatalf("set timeout: %s", text)
+	}
+	got := h.recorded()
+	last := got[len(got)-1]
+	if last.method != http.MethodPut ||
+		last.path != "/api/v1/integrations/"+integrationID+"/endpoints/6a1f0d1e-0000-4000-8000-000000000002/timeout" ||
+		last.body != `{"timeoutSeconds":45}` {
+		t.Fatalf("timeout call = %v", last)
+	}
+}
+
+func TestEndpointTimeoutResetAndLimits(t *testing.T) {
+	h := newHarness(t, Options{Scopes: []string{"manage_integrations"}})
+	endpointID := "6a1f0d1e-0000-4000-8000-000000000001"
+	h.call(t, "set_endpoint_timeout", map[string]any{"integrationId": integrationID, "endpointId": endpointID, "timeoutSeconds": nil})
+	got := h.recorded()
+	if len(got) != 1 || got[0].body != `{"timeoutSeconds":null}` {
+		t.Fatalf("reset call = %v", got)
+	}
+	for _, in := range []map[string]any{
+		{"integrationId": integrationID, "endpointId": endpointID, "timeoutSeconds": 61},
+		{"integrationId": integrationID, "endpointId": endpointID, "timeoutSeconds": 0},
+		{"integrationId": integrationID, "timeoutSeconds": 30},
+		{"integrationId": integrationID, "endpointId": endpointID, "operationId": "getOrders", "timeoutSeconds": 30},
+		{"integrationId": integrationID, "operationId": "noSuchOp", "timeoutSeconds": 30},
+	} {
+		if res, text := h.call(t, "set_endpoint_timeout", in); !res.IsError {
+			t.Errorf("%v accepted: %s", in, text)
+		}
+	}
+	for _, c := range h.recorded()[1:] {
+		if strings.HasSuffix(c.path, "/timeout") {
+			t.Errorf("invalid input reached the API: %v", c)
+		}
 	}
 }
 

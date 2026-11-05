@@ -24,6 +24,11 @@ Placeholders in `value`:
 
 If a required placeholder has no value, the call is not made and the visitor is asked to sign in again. The SDK can refresh tokens without ending the chat.
 
+## Timeouts
+Each call waits 20 s by default. `set_endpoint_timeout` sets 1-60 s for one endpoint (null resets it). A write (POST, PUT, PATCH, DELETE) that runs out of time, loses its connection or gets a 502/504 is reported to the model as **result unknown**, and it is told not to call it again but to check the state with another tool if one can, or tell the visitor the result is not confirmed yet. So raise the timeout of slow writes rather than relying on retries. One reply has about 75 s in total for all its calls. Every non-GET call carries an `Idempotency-Key` header, the same for the same operation and arguments in one conversation.
+
+Replacing the spec keeps each unchanged endpoint's id, tool context and timeout.
+
 ## Rules of thumb
 - Every parameter that picks whose data is touched (`user_id`, `customer_id`, `account_id`…) → bind to `{{identity.sub}}`. Never to `metadata`.
 - User-scoped public APIs → `header Authorization = Bearer {{secret.<token_key>}}`.

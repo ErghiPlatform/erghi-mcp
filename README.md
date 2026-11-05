@@ -120,7 +120,7 @@ Clients that don't support MCP prompts can paste the example prompts from [docs/
 | Action policies | `list_action_policies`, `list_protected_operations`, `get_action_policy`, `get_action_policy_stats`, `test_action_policy`, `create_action_policy`, `update_action_policy`, `set_action_policy_active`, `delete_action_policy` |
 | Channels | `get_channel_status`, `connect_telegram`, `connect_slack`, `connect_whatsapp`, `disconnect_channel` |
 | Widgets | `list_widgets`, `get_widget`, `create_widget`, `update_widget`, `deactivate_widget`, `get_widget_embed_code` |
-| Integrations | `list_integrations`, `get_integration`, `add_integration_from_openapi`, `replace_integration_spec`, `refresh_integration_endpoints`, `update_integration_base_url`, `set_integration_tool_context`, `set_integration_active`, `test_integration_endpoint`, `delete_integration` |
+| Integrations | `list_integrations`, `get_integration`, `add_integration_from_openapi`, `replace_integration_spec`, `refresh_integration_endpoints`, `update_integration_base_url`, `set_integration_tool_context`, `set_endpoint_timeout`, `set_integration_active`, `test_integration_endpoint`, `delete_integration` |
 | Audit | `list_audit_logs` |
 | Conversations | `list_conversations`, `get_conversation`, `send_reply`, `resolve_conversation`, `get_billing_plans` (forwarded from Erghi's hosted MCP endpoint) |
 

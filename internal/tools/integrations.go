@@ -72,6 +72,13 @@ type testEndpointInput struct {
 	Confirm             bool              `json:"confirm,omitempty" jsonschema:"Required for anything but GET, since it runs against the customer's real system. Only set after the user agreed."`
 }
 
+type endpointTimeoutInput struct {
+	IntegrationID  string `json:"integrationId"`
+	EndpointID     string `json:"endpointId,omitempty" jsonschema:"Endpoint id from get_integration. Give this or operationId."`
+	OperationID    string `json:"operationId,omitempty" jsonschema:"operationId from get_integration, instead of endpointId"`
+	TimeoutSeconds *int   `json:"timeoutSeconds" jsonschema:"1 to 60. null resets the endpoint to the platform default (20 s)."`
+}
+
 type deleteIntegrationInput struct {
 	IntegrationID string `json:"integrationId"`
 	Confirm       bool   `json:"confirm" jsonschema:"Must be true. Only set it after the user has explicitly agreed."`
@@ -100,7 +107,14 @@ type endpointInfo struct {
 	LLMToolSchema   *string          `json:"llmToolSchema"`
 	RequestBindings []requestBinding `json:"requestBindings"`
 	AIInstructions  *string          `json:"aiInstructions"`
+	TimeoutSeconds  *int             `json:"timeoutSeconds"`
 }
+
+// Endpoint timeout limits, as the API enforces them.
+const (
+	minEndpointTimeoutSeconds = 1
+	maxEndpointTimeoutSeconds = 60
+)
 
 func listIntegrations(ctx context.Context, api *erghi.Client) ([]integrationSummary, error) {
 	raw, err := api.Do(ctx, http.MethodGet, "/api/v1/integrations", url.Values{"includeEndpoints": {"true"}}, nil)
@@ -184,7 +198,7 @@ func registerIntegrations(r *registry) {
 	})
 	add(r, destructive, needIntegrations, &mcp.Tool{
 		Name:        "replace_integration_spec",
-		Description: "Replace an integration's OpenAPI document. Endpoints no longer in it are removed along with their tool context. Needs confirm=true.",
+		Description: "Replace an integration's OpenAPI document. Endpoints whose method and path are unchanged keep their id, tool context and timeout; endpoints no longer in it are removed with theirs. Needs confirm=true.",
 	}, func(ctx context.Context, in replaceSpecInput) (any, error) {
 		if err := requireConfirm(in.Confirm); err != nil {
 			return nil, err
@@ -245,6 +259,46 @@ func registerIntegrations(r *registry) {
 			"requestBindings": bindings,
 			"aiInstructions":  in.AIInstructions,
 		})
+	})
+	add(r, write, needIntegrations, &mcp.Tool{
+		Name: "set_endpoint_timeout",
+		Description: "Set how long the assistant waits for one endpoint (1-60 s; null resets to the 20 s default). " +
+			"Raise it for slow endpoints, especially writes: a write that runs out of time is reported to the visitor as 'result unknown', not retried. " +
+			"One reply has about 75 s in total for all its calls, so keep timeouts to what the endpoint really needs.",
+	}, func(ctx context.Context, in endpointTimeoutInput) (any, error) {
+		iid, err := id("integrationId", in.IntegrationID)
+		if err != nil {
+			return nil, err
+		}
+		if in.TimeoutSeconds != nil && (*in.TimeoutSeconds < minEndpointTimeoutSeconds || *in.TimeoutSeconds > maxEndpointTimeoutSeconds) {
+			return nil, fmt.Errorf("timeoutSeconds must be between %d and %d, or null for the default", minEndpointTimeoutSeconds, maxEndpointTimeoutSeconds)
+		}
+		eid := in.EndpointID
+		switch {
+		case eid != "" && in.OperationID != "":
+			return nil, fmt.Errorf("give endpointId or operationId, not both")
+		case eid != "":
+			if eid, err = id("endpointId", eid); err != nil {
+				return nil, err
+			}
+		case in.OperationID != "":
+			integration, err := findIntegration(ctx, r.api, iid)
+			if err != nil {
+				return nil, err
+			}
+			for _, e := range integration.Endpoints {
+				if e.OperationID == in.OperationID {
+					eid = e.ID
+				}
+			}
+			if eid == "" {
+				return nil, fmt.Errorf("integration %s has no operation %q", integration.Name, in.OperationID)
+			}
+		default:
+			return nil, fmt.Errorf("endpointId or operationId is required")
+		}
+		return r.api.Do(ctx, http.MethodPut, base+"/"+iid+"/endpoints/"+eid+"/timeout", nil,
+			map[string]*int{"timeoutSeconds": in.TimeoutSeconds})
 	})
 	add(r, write, needIntegrations, &mcp.Tool{
 		Name:        "set_integration_active",

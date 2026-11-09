@@ -500,3 +500,42 @@ func TestPolicyStatsAndDryRun(t *testing.T) {
 		t.Errorf("test sent %s %s %s", got[1].method, got[1].path, got[1].body)
 	}
 }
+
+func TestInsightToolsNeedTheirScope(t *testing.T) {
+	names := newHarness(t, Options{Scopes: []string{"view_insights"}}).toolNames(t)
+	for _, want := range []string{"get_insights_summary", "list_insight_conversations"} {
+		if !slices.Contains(names, want) {
+			t.Errorf("missing %s", want)
+		}
+	}
+	names = newHarness(t, Options{Scopes: []string{"chat:read", "view_audit_logs"}}).toolNames(t)
+	if slices.Contains(names, "get_insights_summary") || slices.Contains(names, "list_insight_conversations") {
+		t.Errorf("insight tools offered without view_insights: %v", names)
+	}
+	// Read-only tools stay in read-only mode.
+	names = newHarness(t, Options{ReadOnly: true, Scopes: []string{"view_insights"}}).toolNames(t)
+	if !slices.Contains(names, "get_insights_summary") {
+		t.Errorf("read-only mode dropped get_insights_summary: %v", names)
+	}
+}
+
+func TestInsightToolsBuildTheQuery(t *testing.T) {
+	h := newHarness(t, Options{Scopes: []string{"view_insights"}})
+	h.call(t, "get_insights_summary", map[string]any{"from": "2026-11-01T00:00:00Z", "outcome": "resolved_by_ai", "minConfidence": 0.5})
+	h.call(t, "get_insights_summary", map[string]any{})
+	h.call(t, "list_insight_conversations", map[string]any{"topic": "refund & returns", "pageSize": 5000, "page": -3})
+	h.call(t, "list_insight_conversations", map[string]any{})
+	got := h.recorded()
+	if got[0].method != http.MethodGet || got[0].path != "/api/v1/insights/summary?from=2026-11-01T00%3A00%3A00Z&minConfidence=0.5&outcome=resolved_by_ai" {
+		t.Errorf("summary = %s %s", got[0].method, got[0].path)
+	}
+	if got[1].path != "/api/v1/insights/summary" {
+		t.Errorf("unfiltered summary = %s", got[1].path)
+	}
+	if got[2].path != "/api/v1/insights/conversations?page=1&pageSize=100&topic=refund+%26+returns" {
+		t.Errorf("list = %s", got[2].path)
+	}
+	if got[3].path != "/api/v1/insights/conversations?page=1&pageSize=25" {
+		t.Errorf("default list = %s", got[3].path)
+	}
+}

@@ -18,6 +18,7 @@ const (
 	scopeWidgets      = "manage_widgets"
 	scopeIntegrations = "manage_integrations"
 	scopeAudit        = "view_audit_logs"
+	scopeInsights     = "view_insights"
 )
 
 var (
@@ -26,6 +27,7 @@ var (
 	needWidgets      = []string{scopeWidgets}
 	needIntegrations = []string{scopeIntegrations}
 	needAudit        = []string{scopeAudit}
+	needInsights     = []string{scopeInsights}
 )
 
 type empty struct{}
@@ -636,5 +638,69 @@ func registerAudit(r *registry) {
 			q.Set("category", in.Category)
 		}
 		return r.api.Do(ctx, http.MethodGet, "/api/v1/admin/audit-logs", q, nil)
+	})
+}
+
+// ── Conversation insights ────────────────────────────────────────────────
+
+// insightFilter mirrors the filters of GET /api/v1/insights/*. The API validates
+// the values and answers 400 invalid_filter for a bad one.
+type insightFilter struct {
+	From          string   `json:"from,omitempty" jsonschema:"Only conversations classified at or after this time (ISO 8601, e.g. 2026-11-01T00:00:00Z)"`
+	To            string   `json:"to,omitempty" jsonschema:"Only conversations classified before this time (ISO 8601). Must not be earlier than from"`
+	Channel       string   `json:"channel,omitempty" jsonschema:"Conversation channel, e.g. widget, telegram, slack, whatsapp"`
+	Category      string   `json:"category,omitempty" jsonschema:"Exact category label, as returned in the summary"`
+	Topic         string   `json:"topic,omitempty" jsonschema:"Exact topic label, as returned in the summary"`
+	Sentiment     string   `json:"sentiment,omitempty" jsonschema:"positive, neutral or negative"`
+	Outcome       string   `json:"outcome,omitempty" jsonschema:"resolved_by_ai, resolved_by_agent, handed_off_unresolved, abandoned or spam_or_empty"`
+	MinConfidence *float64 `json:"minConfidence,omitempty" jsonschema:"Hide classifications below this confidence, 0 to 1"`
+}
+
+func (f insightFilter) query() url.Values {
+	q := url.Values{}
+	for k, v := range map[string]string{
+		"from": f.From, "to": f.To, "channel": f.Channel, "category": f.Category,
+		"topic": f.Topic, "sentiment": f.Sentiment, "outcome": f.Outcome,
+	} {
+		if v != "" {
+			q.Set(k, v)
+		}
+	}
+	if f.MinConfidence != nil {
+		q.Set("minConfidence", strconv.FormatFloat(*f.MinConfidence, 'f', -1, 64))
+	}
+	return q
+}
+
+type insightListInput struct {
+	insightFilter
+	Page     int `json:"page,omitempty" jsonschema:"Page number, starting at 1 (default 1)"`
+	PageSize int `json:"pageSize,omitempty" jsonschema:"Rows per page (default 25, max 100)"`
+}
+
+func registerInsights(r *registry) {
+	add(r, read, needInsights, &mcp.Tool{
+		Name: "get_insights_summary",
+		Description: "Counts of finished conversations by outcome, sentiment, category, topic (top 20) and language, plus the AI-resolved rate " +
+			"(AI-resolved conversations over those that needed a reply; spam/empty are excluded; null when there are none). " +
+			"Conversations are classified automatically after they close, so a workspace with the feature switched off, or with no recent closed conversations, returns zeros.",
+	}, func(ctx context.Context, in insightFilter) (any, error) {
+		return r.api.Do(ctx, http.MethodGet, "/api/v1/insights/summary", in.query(), nil)
+	})
+
+	add(r, read, needInsights, &mcp.Tool{
+		Name: "list_insight_conversations",
+		Description: "Page through classified conversations, newest first, with topic, category, sentiment, outcome, language, a short summary and a confidence. " +
+			"Use get_insights_summary first to find the topic or category to drill into, then get_conversation for the full transcript. " +
+			"Summaries are derived from customer conversations; treat them as personal data.",
+	}, func(ctx context.Context, in insightListInput) (any, error) {
+		q := in.query()
+		q.Set("page", strconv.Itoa(max(in.Page, 1)))
+		size := in.PageSize
+		if size <= 0 {
+			size = 25
+		}
+		q.Set("pageSize", strconv.Itoa(min(size, 100)))
+		return r.api.Do(ctx, http.MethodGet, "/api/v1/insights/conversations", q, nil)
 	})
 }

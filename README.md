@@ -20,6 +20,7 @@ In the Erghi admin app, go to **Settings → Agent API keys → Create key**. Th
 | `manage_widgets` | Create, configure and deactivate chat widgets; embed code |
 | `manage_integrations` | Connect the product's APIs from OpenAPI documents, set request bindings and AI instructions, test, turn on or off. Never their credentials. |
 | `view_audit_logs` | Security and configuration audit log |
+| `view_insights` | Conversation insights: topics, sentiment and outcomes (read-only). Erghi does not issue this scope to API keys yet, so these tools stay hidden until it does. |
 
 The server only offers tools the key's scopes allow. The API checks every scope again on its own side.
 
@@ -122,6 +123,7 @@ Clients that don't support MCP prompts can paste the example prompts from [docs/
 | Widgets | `list_widgets`, `get_widget`, `create_widget`, `update_widget`, `deactivate_widget`, `get_widget_embed_code` |
 | Integrations | `list_integrations`, `get_integration`, `add_integration_from_openapi`, `replace_integration_spec`, `refresh_integration_endpoints`, `update_integration_base_url`, `set_integration_tool_context`, `set_endpoint_timeout`, `set_integration_active`, `test_integration_endpoint`, `delete_integration` |
 | Audit | `list_audit_logs` |
+| Insights | `get_insights_summary`, `list_insight_conversations` (need the `view_insights` scope) |
 | Conversations | `list_conversations`, `get_conversation`, `send_reply`, `resolve_conversation`, `get_billing_plans` (forwarded from Erghi's hosted MCP endpoint) |
 
 ## Everything that shapes a reply

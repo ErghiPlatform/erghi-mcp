@@ -20,7 +20,7 @@ In the Erghi admin app, go to **Settings → Agent API keys → Create key**. Th
 | `manage_widgets` | Create, configure and deactivate chat widgets; embed code |
 | `manage_integrations` | Connect the product's APIs from OpenAPI documents, set request bindings and AI instructions, test, turn on or off. Never their credentials. |
 | `view_audit_logs` | Security and configuration audit log |
-| `view_insights` | Conversation insights: topics, sentiment and outcomes (read-only). Erghi does not issue this scope to API keys yet, so these tools stay hidden until it does. |
+| `view_insights` | Conversation insights: topics, sentiment and outcomes (read-only). Create the key with the "View insights" scope in Agent keys; Free workspaces get a plan_upgrade_required error. |
 
 The server only offers tools the key's scopes allow. The API checks every scope again on its own side.
 

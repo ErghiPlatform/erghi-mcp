@@ -8,7 +8,7 @@ Scopes on the key decide which tools exist:
 | `configure_ai` | Assistant instructions and AI settings, knowledge base, action policies, channels, AI and voice usage |
 | `manage_workspace_identity` | Company name, colours, logo, links, custom domain |
 | `manage_widgets` | Widgets, embed code, proactive campaigns |
-| `manage_integrations` | Integrations (specs, tool context, activate, test, delete) and outgoing webhooks |
+| `manage_integrations` | Integrations (specs, tool context, activate, test, delete), and outgoing webhooks together with `chat:read` |
 | `manage_inbox_settings` | Labels, saved replies, teams, routing, business hours, SLAs, automation rules, satisfaction survey |
 | `view_insights` | Insights, reports, satisfaction answers (read-only) |
 | `view_audit_logs` | Audit log |

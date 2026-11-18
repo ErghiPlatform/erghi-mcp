@@ -78,6 +78,16 @@ List my open Erghi conversations waiting for a human. For each, summarise what t
 and draft a reply. Don't send anything until I approve each one.
 ```
 
+## Triage the inbox
+
+Key scopes: `chat:read`, `chat:write`.
+
+```text
+Go through my open Erghi conversations. Label each one with the closest existing label, set its
+priority, and leave an internal note saying why. Suggest who to assign each one to and wait for my
+OK before assigning or running any macro.
+```
+
 ## Analyse the product and plan the assistant
 
 Key scopes: `configure_ai`, `manage_workspace_identity`, `manage_widgets`, plus `manage_integrations` if there is an API. Or use the `analyze_product` prompt.

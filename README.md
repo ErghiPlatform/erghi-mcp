@@ -13,8 +13,10 @@ In the Erghi admin app, go to **Settings → Agent API keys → Create key**. Th
 
 | Scope | Unlocks |
 |---|---|
-| `chat:read` | Read conversations and page through all their messages |
-| `chat:write` | Reply to and resolve conversations |
+| `chat:read` | Read conversations and page through all their messages; read a conversation's internal notes and labels, and the labels, teams, assignable members and shared macros to work with |
+| `chat:write` | Work conversations: reply, resolve and reopen, internal notes, labels, assign and unassign, snooze, priority, team, bulk actions, shared macros, and the reply copilot (draft, summarize, rewrite, translate; each use counts as an AI reply) |
+| `contacts:read` | Search and read contacts (name, email, phone, recent conversations). Personal data: never on by default, and every read is audited. |
+| `contacts:write` | Edit a contact's name, email and phone. Never on by default; every edit is audited. |
 | `configure_ai` | Assistant model and persona, knowledge base (including file uploads), website crawls, channels (Telegram/Slack/WhatsApp/email), action policies, AI and voice usage |
 | `manage_workspace_identity` | Company name, colours, logo, widget theme, legal and support links, custom domain |
 | `manage_widgets` | Create, configure and deactivate chat widgets; embed code; proactive widget campaigns |
@@ -129,6 +131,8 @@ Clients that don't support MCP prompts can paste the example prompts from [docs/
 | Audit | `list_audit_logs` |
 | Insights and reports | `get_insights_summary`, `list_insight_conversations`, `get_report_summary`, `get_first_response_distribution`, `get_report_breakdown`, `list_csat_responses` (need the `view_insights` scope) |
 | Conversations | `list_conversations`, `get_conversation`, `send_reply`, `resolve_conversation`, `get_billing_plans` (forwarded from Erghi's hosted MCP endpoint), `list_conversation_messages` |
+| Working conversations | Read (`chat:read`): `get_agent_inbox_options`, `list_conversation_notes`, `list_labels_on_conversation`. Act (`chat:write`): `add_conversation_note`, `add_label_to_conversation`, `remove_label_from_conversation`, `assign_conversation`, `unassign_conversation`, `snooze_conversation`, `unsnooze_conversation`, `set_conversation_priority`, `set_conversation_team`, `reopen_conversation`, `bulk_update_conversations`, `apply_macro`, `run_reply_copilot` |
+| Contacts | `list_contacts`, `get_contact` (`contacts:read`), `update_contact` (`contacts:write`) |
 
 \* Reads a file from this computer, so it is offered only in stdio mode (not with `ERGHI_MCP_TRANSPORT=http`). It takes an absolute path, skips hidden files, and accepts only the listed file types and sizes (knowledge: PDF, Word, text, Markdown, CSV, HTML up to 10 MB; logo: PNG, JPEG, WebP up to 1 MB).
 
@@ -185,7 +189,7 @@ Put it behind TLS before you expose it beyond localhost. Anyone holding the HTTP
   - With `manage_integrations` a key can connect and configure APIs, but integration credentials, the widget identity secret and API keys stay human-only (403 `api_key_not_allowed`). Once an integration has credentials, a key can't change its base URL, so it can't redirect them to another server.
   - Endpoints are closed to keys unless they are explicitly opened for a scope.
 - **Short-lived tokens, fast revocation.** The key is exchanged for a two-hour token and renewed automatically. Revoking or expiring the key in the admin app stops it within about 30 seconds, including tokens already issued.
-- **Destructive actions need `confirm=true`.** This covers deletes, disconnects, deactivations, removing team or inbox members, replacing an integration's spec, rotating a webhook secret, uploading a local file, and testing any integration endpoint that isn't a GET (it runs against the real system). Creating a webhook, or pointing one at a new address, also needs it: a webhook sends conversation content to that address. The model is told to set it only after you explicitly agree.
+- **Destructive actions need `confirm=true`.** This covers deletes, disconnects, deactivations, removing team or inbox members, replacing an integration's spec, rotating a webhook secret, uploading a local file, and testing any integration endpoint that isn't a GET (it runs against the real system). Creating a webhook, or pointing one at a new address, also needs it: a webhook sends conversation content to that address. So do bulk conversation actions and running a macro, which can send a saved reply to the customer. The model is told to set it only after you explicitly agree.
 - **Read-only mode** (`ERGHI_MCP_READ_ONLY=true`) for audits and dashboards.
 - **No path steering.** Resource ids are validated as UUIDs, and channel names and inbox types against fixed lists, before they reach a URL.
 - **Local files only in stdio mode.** `upload_knowledge_file` and `upload_logo` exist only when the server runs on your own computer, read only the absolute path you name, and refuse hidden files, other file types and oversize files.
@@ -195,13 +199,14 @@ Put it behind TLS before you expose it beyond localhost. Anyone holding the HTTP
   - Logs go to stderr and never include the secret.
   - The API URL must be HTTPS.
 - **Prompt-injection hygiene.** The server instructions and prompts tell the model to treat page, document and conversation content as data. Treat that as defence in depth, not a guarantee: the scopes you grant are the real limit.
-- **Audited.** Changes made through a key are recorded in the workspace audit log under the key's client ID. This covers branding, AI settings, knowledge base, integration, action policy and channel changes, plus key creation and revocation.
+- **Audited.** Changes made through a key are recorded in the workspace audit log under the key's client ID. This covers branding, AI settings, knowledge base, integration, action policy and channel changes, every change a key makes to a conversation (notes, labels, assignment, snooze, priority, team, status, macros), every contact read and edit, plus key creation and revocation.
+- **A key acts as itself.** It is never a workspace member: a note it adds shows the key's name followed by "(API key)", and the key can't edit or delete notes. A key sees every conversation in its workspace, which is why only someone who can see every conversation can create one.
 
 ### Deliberately not available through a key
 
 Billing and plan changes, inviting or removing workspace members and changing roles, API keys, integration credentials, the widget identity secret, single sign-on, website/site registration, creating workspaces, and account deletion. Use the admin app for those. Personal settings (your notifications, preferences, saved views) belong to a person, not a key.
 
-Working a conversation as an agent — internal notes, labelling, snoozing, priority, assigning, reopening, bulk actions, contacts, macros and reply drafting — isn't available to keys yet. Those actions are recorded against a person, so they need their own author model before keys can take them. `chat:write` covers replying and resolving.
+For contacts, blocking, unblocking, erasure and contact notes stay with people. Personal macros are never visible to a key; only shared ones are.
 
 ## Development
 

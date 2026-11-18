@@ -23,6 +23,11 @@ const (
 	scopeInsights     = "view_insights"
 	scopeInbox        = "manage_inbox_settings"
 	scopeChatRead     = "chat:read"
+	scopeChatWrite    = "chat:write"
+	scopeContactsRead = "contacts:read"
+	// contacts:write is checked by the API on its own; a key with it also
+	// needs contacts:read to find the contact first.
+	scopeContactsWrite = "contacts:write"
 )
 
 var (
@@ -35,6 +40,9 @@ var (
 	needIdentity     = []string{scopeIdentity}
 	needInbox        = []string{scopeInbox}
 	needChatRead     = []string{scopeChatRead}
+	needChatWrite    = []string{scopeChatWrite}
+	needContactsRead = []string{scopeContactsRead}
+	needContactsEdit = []string{scopeContactsWrite}
 )
 
 type empty struct{}

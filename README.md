@@ -13,14 +13,15 @@ In the Erghi admin app, go to **Settings → Agent API keys → Create key**. Th
 
 | Scope | Unlocks |
 |---|---|
-| `chat:read` | Read conversations and messages |
+| `chat:read` | Read conversations and page through all their messages |
 | `chat:write` | Reply to and resolve conversations |
-| `configure_ai` | Assistant model and persona, knowledge base, website crawls, channels (Telegram/Slack/WhatsApp), action policies |
-| `manage_workspace_identity` | Company name, colours, widget theme, legal and support links |
-| `manage_widgets` | Create, configure and deactivate chat widgets; embed code |
-| `manage_integrations` | Connect the product's APIs from OpenAPI documents, set request bindings and AI instructions, test, turn on or off. Never their credentials. |
+| `configure_ai` | Assistant model and persona, knowledge base (including file uploads), website crawls, channels (Telegram/Slack/WhatsApp/email), action policies, AI and voice usage |
+| `manage_workspace_identity` | Company name, colours, logo, widget theme, legal and support links, custom domain |
+| `manage_widgets` | Create, configure and deactivate chat widgets; embed code; proactive widget campaigns |
+| `manage_integrations` | Connect the product's APIs from OpenAPI documents, set request bindings and AI instructions, test, turn on or off. Outgoing webhooks. Never integration credentials. |
 | `view_audit_logs` | Security and configuration audit log |
-| `view_insights` | Conversation insights: topics, sentiment and outcomes (read-only). Create the key with the "View insights" scope in Agent keys; Free workspaces get a plan_upgrade_required error. |
+| `manage_inbox_settings` | How conversations are organised: labels, saved replies, teams, inbox members, assignment, business hours, SLA policies, automation rules, the satisfaction survey. Not conversations themselves. |
+| `view_insights` | Conversation insights (topics, sentiment, outcomes), support reports and satisfaction-survey answers (read-only). Create the key with the "View insights" scope in Agent keys; Free workspaces get a plan_upgrade_required error. |
 
 The server only offers tools the key's scopes allow. The API checks every scope again on its own side.
 
@@ -115,16 +116,21 @@ Clients that don't support MCP prompts can paste the example prompts from [docs/
 | Area | Tools |
 |---|---|
 | Key, setup and analysis | `get_api_key_info`, `get_setup_checklist`, `review_chat_setup`, `get_erghi_guide` |
-| AI | `get_ai_settings`, `list_available_models`, `update_ai_settings`, `get_ai_cost_usage` |
-| Knowledge base | `list_knowledge_documents`, `add_knowledge_document`, `add_faq`, `delete_knowledge_document`, `search_knowledge_base`, `crawl_website`, `get_crawl_job`, `cancel_crawl_job`, `schedule_website_crawl`, `list_crawl_schedules`, `disable_crawl_schedule`, `test_assistant` |
-| Branding & persona | `get_branding`, `update_branding` |
-| Action policies | `list_action_policies`, `list_protected_operations`, `get_action_policy`, `get_action_policy_stats`, `test_action_policy`, `create_action_policy`, `update_action_policy`, `set_action_policy_active`, `delete_action_policy` |
-| Channels | `get_channel_status`, `connect_telegram`, `connect_slack`, `connect_whatsapp`, `disconnect_channel` |
+| AI | `get_ai_settings`, `list_available_models`, `update_ai_settings`, `get_ai_cost_usage`, `get_voice_usage` |
+| Knowledge base | `list_knowledge_documents`, `add_knowledge_document`, `upload_knowledge_file`\*, `add_faq`, `retry_document_embedding`, `delete_knowledge_document`, `search_knowledge_base`, `crawl_website`, `get_crawl_job`, `cancel_crawl_job`, `schedule_website_crawl`, `list_crawl_schedules`, `disable_crawl_schedule`, `test_assistant` |
+| Branding & persona | `get_branding`, `update_branding`, `upload_logo`\*, `remove_logo`, `set_custom_domain`, `verify_custom_domain` |
+| Action policies | `list_action_policies`, `list_protected_operations`, `get_action_policy`, `get_action_policy_stats`, `get_operation_fields`, `test_action_policy`, `create_action_policy`, `update_action_policy`, `set_action_policy_active`, `delete_action_policy` |
+| Channels | `get_channel_status`, `connect_telegram`, `connect_slack`, `connect_whatsapp`, `connect_email`, `disconnect_channel` |
 | Widgets | `list_widgets`, `get_widget`, `create_widget`, `update_widget`, `deactivate_widget`, `get_widget_embed_code` |
+| Widget campaigns | `list_campaigns`, `get_campaign`, `create_campaign`, `update_campaign`, `delete_campaign` |
 | Integrations | `list_integrations`, `get_integration`, `add_integration_from_openapi`, `replace_integration_spec`, `refresh_integration_endpoints`, `update_integration_base_url`, `set_integration_tool_context`, `set_endpoint_timeout`, `set_integration_active`, `test_integration_endpoint`, `delete_integration` |
+| Webhooks | `list_webhook_event_types`, `list_webhooks`, `get_webhook`, `create_webhook`, `update_webhook`, `delete_webhook`, `rotate_webhook_secret`, `send_test_webhook`, `list_webhook_deliveries`, `get_webhook_delivery`, `retry_webhook_delivery` |
+| Inbox settings | Labels: `list_conversation_labels`, `create_conversation_label`, `update_conversation_label`, `delete_conversation_label`. Saved replies: `list_saved_replies`, `create_saved_reply`, `update_saved_reply`, `delete_saved_reply`. Teams: `list_teams`, `get_team`, `create_team`, `update_team`, `delete_team`, `list_team_members`, `add_team_member`, `remove_team_member`. Routing: `list_assignable_members`, `list_inbox_members`, `add_inbox_member`, `remove_inbox_member`, `get_assignment_settings`, `update_assignment_settings`. Hours and SLAs: `get_business_hours`, `set_business_hours`, `clear_inbox_business_hours`, `list_sla_policies`, `get_sla_policy`, `create_sla_policy`, `update_sla_policy`, `delete_sla_policy`. Automations: `list_automations`, `get_automation`, `create_automation`, `update_automation`, `delete_automation`, `reorder_automations`, `test_automation`, `list_automation_runs`. Survey: `get_csat_settings`, `update_csat_settings` |
 | Audit | `list_audit_logs` |
-| Insights | `get_insights_summary`, `list_insight_conversations` (need the `view_insights` scope) |
-| Conversations | `list_conversations`, `get_conversation`, `send_reply`, `resolve_conversation`, `get_billing_plans` (forwarded from Erghi's hosted MCP endpoint) |
+| Insights and reports | `get_insights_summary`, `list_insight_conversations`, `get_report_summary`, `get_first_response_distribution`, `get_report_breakdown`, `list_csat_responses` (need the `view_insights` scope) |
+| Conversations | `list_conversations`, `get_conversation`, `send_reply`, `resolve_conversation`, `get_billing_plans` (forwarded from Erghi's hosted MCP endpoint), `list_conversation_messages` |
+
+\* Reads a file from this computer, so it is offered only in stdio mode (not with `ERGHI_MCP_TRANSPORT=http`). It takes an absolute path, skips hidden files, and accepts only the listed file types and sizes (knowledge: PDF, Word, text, Markdown, CSV, HTML up to 10 MB; logo: PNG, JPEG, WebP up to 1 MB).
 
 ## Everything that shapes a reply
 
@@ -179,9 +185,10 @@ Put it behind TLS before you expose it beyond localhost. Anyone holding the HTTP
   - With `manage_integrations` a key can connect and configure APIs, but integration credentials, the widget identity secret and API keys stay human-only (403 `api_key_not_allowed`). Once an integration has credentials, a key can't change its base URL, so it can't redirect them to another server.
   - Endpoints are closed to keys unless they are explicitly opened for a scope.
 - **Short-lived tokens, fast revocation.** The key is exchanged for a two-hour token and renewed automatically. Revoking or expiring the key in the admin app stops it within about 30 seconds, including tokens already issued.
-- **Destructive actions need `confirm=true`.** This covers deletes, disconnects, deactivations, replacing an integration's spec, and testing any integration endpoint that isn't a GET (it runs against the real system). The model is told to set it only after you explicitly agree.
+- **Destructive actions need `confirm=true`.** This covers deletes, disconnects, deactivations, removing team or inbox members, replacing an integration's spec, rotating a webhook secret, uploading a local file, and testing any integration endpoint that isn't a GET (it runs against the real system). Creating a webhook, or pointing one at a new address, also needs it: a webhook sends conversation content to that address. The model is told to set it only after you explicitly agree.
 - **Read-only mode** (`ERGHI_MCP_READ_ONLY=true`) for audits and dashboards.
-- **No path steering.** Resource ids are validated as UUIDs and channel names against a fixed list before they reach a URL.
+- **No path steering.** Resource ids are validated as UUIDs, and channel names and inbox types against fixed lists, before they reach a URL.
+- **Local files only in stdio mode.** `upload_knowledge_file` and `upload_logo` exist only when the server runs on your own computer, read only the absolute path you name, and refuse hidden files, other file types and oversize files.
 - **Bounded output.** API responses over 1 MB are refused, so a single call can't flood the model's context.
 - **Secrets stay out of logs and URLs.**
   - Credentials come from the environment or a secrets file.
@@ -192,7 +199,9 @@ Put it behind TLS before you expose it beyond localhost. Anyone holding the HTTP
 
 ### Deliberately not available through a key
 
-Billing and plan changes, team members and roles, integration credentials, the widget identity secret, API keys, logo upload, custom domains, website/site registration, and account deletion. Use the admin app for those.
+Billing and plan changes, inviting or removing workspace members and changing roles, API keys, integration credentials, the widget identity secret, single sign-on, website/site registration, creating workspaces, and account deletion. Use the admin app for those. Personal settings (your notifications, preferences, saved views) belong to a person, not a key.
+
+Working a conversation as an agent — internal notes, labelling, snoozing, priority, assigning, reopening, bulk actions, contacts, macros and reply drafting — isn't available to keys yet. Those actions are recorded against a person, so they need their own author model before keys can take them. `chat:write` covers replying and resolving.
 
 ## Development
 

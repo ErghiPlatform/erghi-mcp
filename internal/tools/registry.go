@@ -26,7 +26,11 @@ type Options struct {
 	WidgetHost string
 	// AppURL is the admin app, linked for steps API keys can't do.
 	AppURL string
-	Logger *slog.Logger
+	// LocalFiles lets the upload tools read a file from this machine by path.
+	// Only for the stdio transport, where the server runs as the user next to
+	// their files; over HTTP a path would name a file on the server.
+	LocalFiles bool
+	Logger     *slog.Logger
 }
 
 type kind int
@@ -62,6 +66,11 @@ func Register(server *mcp.Server, api *erghi.Client, opts Options) []string {
 	registerGuide(r)
 	registerAudit(r)
 	registerInsights(r)
+	registerReports(r)
+	registerCampaigns(r)
+	registerWebhooks(r)
+	registerInbox(r)
+	registerConversations(r)
 	return r.added
 }
 

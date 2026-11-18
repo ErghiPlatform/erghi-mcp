@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -19,6 +21,8 @@ const (
 	scopeIntegrations = "manage_integrations"
 	scopeAudit        = "view_audit_logs"
 	scopeInsights     = "view_insights"
+	scopeInbox        = "manage_inbox_settings"
+	scopeChatRead     = "chat:read"
 )
 
 var (
@@ -28,9 +32,20 @@ var (
 	needIntegrations = []string{scopeIntegrations}
 	needAudit        = []string{scopeAudit}
 	needInsights     = []string{scopeInsights}
+	needIdentity     = []string{scopeIdentity}
+	needInbox        = []string{scopeInbox}
+	needChatRead     = []string{scopeChatRead}
 )
 
 type empty struct{}
+
+var operationIDPattern = regexp.MustCompile(`^[A-Za-z0-9._-]{1,200}$`)
+
+type uploadFileInput struct {
+	Path    string `json:"path" jsonschema:"Absolute path of the file on this computer"`
+	Title   string `json:"title,omitempty" jsonschema:"Document title; defaults to the file name"`
+	Confirm bool   `json:"confirm" jsonschema:"Must be true. Only set it after the user has agreed to upload this file."`
+}
 
 type confirmOnly struct {
 	Confirm bool `json:"confirm" jsonschema:"Must be true. Only set it after the user has explicitly agreed to this change."`
@@ -104,6 +119,12 @@ func registerAI(r *registry) {
 			days = 30
 		}
 		return r.api.Do(ctx, http.MethodGet, "/api/v1/ai-settings/cost-usage", url.Values{"sinceDays": {strconv.Itoa(days)}}, nil)
+	})
+	add(r, read, needAI, &mcp.Tool{
+		Name:        "get_voice_usage",
+		Description: "Visitor voice-note usage this billing period: minutes transcribed, the plan's allowance and whether voice notes are on.",
+	}, func(ctx context.Context, _ empty) (any, error) {
+		return r.api.Do(ctx, http.MethodGet, "/api/v1/ai-settings/voice-usage", nil, nil)
 	})
 }
 
@@ -252,6 +273,39 @@ func registerKnowledge(r *registry) {
 	}, func(ctx context.Context, in playgroundInput) (any, error) {
 		return r.api.Do(ctx, http.MethodPost, "/api/v1/rag/playground", nil, in)
 	})
+	add(r, write, needAI, &mcp.Tool{
+		Name:        "retry_document_embedding",
+		Description: "Re-run embedding for a knowledge document whose status is failed (see list_knowledge_documents), so the assistant can find it again.",
+	}, func(ctx context.Context, in struct {
+		DocumentID string `json:"documentId"`
+	}) (any, error) {
+		docID, err := id("documentId", in.DocumentID)
+		if err != nil {
+			return nil, err
+		}
+		return r.api.Do(ctx, http.MethodPost, "/api/v1/rag/documents/"+docID+"/retry-embedding", nil, nil)
+	})
+	if r.opts.LocalFiles {
+		add(r, write, needAI, &mcp.Tool{
+			Name: "upload_knowledge_file",
+			Description: "Add a document file from this computer (PDF, Word, text, Markdown, HTML or CSV, up to 10 MB) to the knowledge base. " +
+				"Everything in it becomes something the assistant can tell visitors, so only upload a file the user named, and show them its name first. " +
+				"For text you already have, use add_knowledge_document instead. Needs confirm=true.",
+		}, func(ctx context.Context, in uploadFileInput) (any, error) {
+			if err := requireConfirm(in.Confirm); err != nil {
+				return nil, err
+			}
+			f, err := localFile(in.Path, "file", knowledgeExtensions, maxKnowledgeBytes)
+			if err != nil {
+				return nil, err
+			}
+			title := strings.TrimSpace(in.Title)
+			if title == "" {
+				title = strings.TrimSuffix(f.Name, filepath.Ext(f.Name))
+			}
+			return r.api.DoMultipart(ctx, http.MethodPost, "/api/v1/rag/documents/upload", map[string]string{"title": title}, f)
+		})
+	}
 }
 
 // ── Branding and assistant persona ───────────────────────────────────────
@@ -297,6 +351,44 @@ func registerBranding(r *registry) {
 		Description: "Update branding and the assistant persona. Only the fields you pass change. Company/colour/URL fields need manage_workspace_identity; assistant fields (ai*, handoff, escalation) need configure_ai.",
 	}, func(ctx context.Context, in updateBrandingInput) (any, error) {
 		return r.api.Do(ctx, http.MethodPut, "/api/v1/branding", nil, in)
+	})
+	add(r, destructive, needIdentity, &mcp.Tool{
+		Name:        "remove_logo",
+		Description: "Remove the workspace logo from the widget and emails. Needs confirm=true.",
+	}, func(ctx context.Context, in confirmOnly) (any, error) {
+		if err := requireConfirm(in.Confirm); err != nil {
+			return nil, err
+		}
+		return r.api.Do(ctx, http.MethodDelete, "/api/v1/branding/logo", nil, nil)
+	})
+	if r.opts.LocalFiles {
+		add(r, write, needIdentity, &mcp.Tool{
+			Name:        "upload_logo",
+			Description: "Upload the workspace logo (PNG, JPEG or WebP, up to 1 MB) from a file on this computer. It replaces the current logo.",
+		}, func(ctx context.Context, in struct {
+			Path string `json:"path" jsonschema:"Absolute path of the image file"`
+		}) (any, error) {
+			f, err := localFile(in.Path, "file", logoExtensions, maxLogoBytes)
+			if err != nil {
+				return nil, err
+			}
+			return r.api.DoMultipart(ctx, http.MethodPost, "/api/v1/branding/logo", nil, f)
+		})
+	}
+	add(r, write, needIdentity, &mcp.Tool{
+		Name: "set_custom_domain",
+		Description: "Record the custom domain the workspace wants to serve chat on, e.g. support.example.com. " +
+			"This is informational today: verification only checks the domain answers over HTTPS, and Erghi does not serve chat on it yet.",
+	}, func(ctx context.Context, in struct {
+		Domain string `json:"domain" jsonschema:"Host name only, no scheme or path"`
+	}) (any, error) {
+		return r.api.Do(ctx, http.MethodPost, "/api/v1/branding/custom-domain", nil, in)
+	})
+	add(r, write, needIdentity, &mcp.Tool{
+		Name:        "verify_custom_domain",
+		Description: "Check the recorded custom domain answers over HTTPS and update its verified badge.",
+	}, func(ctx context.Context, _ empty) (any, error) {
+		return r.api.Do(ctx, http.MethodPost, "/api/v1/branding/verify-domain", nil, nil)
 	})
 }
 
@@ -359,6 +451,17 @@ func registerPolicies(r *registry) {
 		Description: "List the integration operations an action policy can protect.",
 	}, func(ctx context.Context, _ empty) (any, error) {
 		return r.api.Do(ctx, http.MethodGet, base+"/operations", nil, nil)
+	})
+	add(r, read, needAI, &mcp.Tool{
+		Name:        "get_operation_fields",
+		Description: "The argument and response fields of one protected operation, for writing argument rules and response checks in an action policy.",
+	}, func(ctx context.Context, in struct {
+		OperationID string `json:"operationId" jsonschema:"operationId from list_protected_operations"`
+	}) (any, error) {
+		if !operationIDPattern.MatchString(in.OperationID) {
+			return nil, fmt.Errorf("operationId must be letters, digits, '.', '_' or '-', got %q", in.OperationID)
+		}
+		return r.api.Do(ctx, http.MethodGet, base+"/operations/"+url.PathEscape(in.OperationID)+"/fields", nil, nil)
 	})
 	add(r, read, needAI, &mcp.Tool{
 		Name:        "get_action_policy",
@@ -445,11 +548,11 @@ func registerPolicies(r *registry) {
 // ── Channels ─────────────────────────────────────────────────────────────
 
 type channelInput struct {
-	Channel string `json:"channel" jsonschema:"telegram, slack or whatsapp"`
+	Channel string `json:"channel" jsonschema:"telegram, slack, whatsapp or email"`
 }
 
 type disconnectChannelInput struct {
-	Channel string `json:"channel" jsonschema:"telegram, slack or whatsapp"`
+	Channel string `json:"channel" jsonschema:"telegram, slack, whatsapp or email"`
 	Confirm bool   `json:"confirm" jsonschema:"Must be true. Only set it after the user has explicitly agreed."`
 }
 
@@ -468,16 +571,16 @@ type whatsAppInput struct {
 
 func channelPath(channel string) (string, error) {
 	switch channel {
-	case "telegram", "slack", "whatsapp":
+	case "telegram", "slack", "whatsapp", "email":
 		return "/api/v1/channels/" + channel, nil
 	}
-	return "", fmt.Errorf("channel must be telegram, slack or whatsapp, got %q", channel)
+	return "", fmt.Errorf("channel must be telegram, slack, whatsapp or email, got %q", channel)
 }
 
 func registerChannels(r *registry) {
 	add(r, read, needAI, &mcp.Tool{
 		Name:        "get_channel_status",
-		Description: "Whether Telegram, Slack or WhatsApp is connected.",
+		Description: "Whether Telegram, Slack, WhatsApp or the email channel is connected (for email, also the forwarding address).",
 	}, func(ctx context.Context, in channelInput) (any, error) {
 		p, err := channelPath(in.Channel)
 		if err != nil {
@@ -503,9 +606,16 @@ func registerChannels(r *registry) {
 	}, func(ctx context.Context, in whatsAppInput) (any, error) {
 		return r.api.Do(ctx, http.MethodPost, "/api/v1/channels/whatsapp/connect", nil, in)
 	})
+	add(r, write, needAI, &mcp.Tool{
+		Name: "connect_email",
+		Description: "Turn on the email channel: Erghi gives the workspace an inbound address. The user then forwards their support mailbox to it, " +
+			"and the assistant answers email like chat. Returns the address; calling it again returns the existing one.",
+	}, func(ctx context.Context, _ empty) (any, error) {
+		return r.api.Do(ctx, http.MethodPost, "/api/v1/channels/email/connect", nil, nil)
+	})
 	add(r, destructive, needAI, &mcp.Tool{
 		Name:        "disconnect_channel",
-		Description: "Disconnect Telegram, Slack or WhatsApp. Needs confirm=true.",
+		Description: "Disconnect Telegram, Slack, WhatsApp or the email channel. Needs confirm=true.",
 	}, func(ctx context.Context, in disconnectChannelInput) (any, error) {
 		if err := requireConfirm(in.Confirm); err != nil {
 			return nil, err

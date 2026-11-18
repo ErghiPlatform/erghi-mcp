@@ -19,7 +19,6 @@ func TestNewToolsFollowTheirScope(t *testing.T) {
 	cases := map[string][]string{
 		"manage_inbox_settings": {"list_conversation_labels", "create_saved_reply", "create_team", "update_assignment_settings",
 			"set_business_hours", "create_sla_policy", "create_automation", "update_csat_settings", "add_inbox_member"},
-		"manage_integrations":       {"create_webhook", "rotate_webhook_secret", "list_webhook_deliveries"},
 		"manage_widgets":            {"list_campaigns", "create_campaign", "delete_campaign"},
 		"view_insights":             {"get_report_summary", "get_report_breakdown", "list_csat_responses"},
 		"chat:read":                 {"list_conversation_messages"},
@@ -47,8 +46,27 @@ func TestNewToolsFollowTheirScope(t *testing.T) {
 	}
 }
 
+func TestWebhooksNeedIntegrationsAndChatRead(t *testing.T) {
+	webhookTools := []string{"list_webhooks", "create_webhook", "rotate_webhook_secret", "list_webhook_deliveries"}
+	for _, tc := range []struct {
+		scopes []string
+		want   bool
+	}{
+		{[]string{"manage_integrations"}, false},
+		{[]string{"chat:read"}, false},
+		{[]string{"manage_integrations", "chat:read"}, true},
+	} {
+		names := newHarness(t, Options{Scopes: tc.scopes}).toolNames(t)
+		for _, n := range webhookTools {
+			if slices.Contains(names, n) != tc.want {
+				t.Errorf("scopes %v: offers %s = %v, want %v", tc.scopes, n, !tc.want, tc.want)
+			}
+		}
+	}
+}
+
 func TestReadOnlyKeepsOnlyNewReads(t *testing.T) {
-	names := newHarness(t, Options{ReadOnly: true, Scopes: []string{"manage_inbox_settings", "manage_integrations", "manage_widgets"}}).toolNames(t)
+	names := newHarness(t, Options{ReadOnly: true, Scopes: []string{"manage_inbox_settings", "manage_integrations", "manage_widgets", "chat:read"}}).toolNames(t)
 	for _, n := range []string{"list_automations", "test_automation", "list_webhooks", "list_campaigns"} {
 		if !slices.Contains(names, n) {
 			t.Errorf("read-only lost %s", n)
@@ -181,7 +199,7 @@ func TestPathsAndBodies(t *testing.T) {
 }
 
 func TestNewToolsRejectBadInputBeforeSending(t *testing.T) {
-	h := newHarness(t, Options{Scopes: []string{"manage_inbox_settings", "manage_integrations", "manage_widgets", "configure_ai"}})
+	h := newHarness(t, Options{Scopes: []string{"manage_inbox_settings", "manage_integrations", "manage_widgets", "configure_ai", "chat:read"}})
 	cases := map[string]map[string]any{
 		"delete_team":                {"id": uuidA},
 		"create_webhook":             {"url": "https://example.com/hook", "eventTypes": []any{"conversation.created"}},

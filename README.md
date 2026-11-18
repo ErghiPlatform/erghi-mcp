@@ -18,7 +18,7 @@ In the Erghi admin app, go to **Settings → Agent API keys → Create key**. Th
 | `configure_ai` | Assistant model and persona, knowledge base (including file uploads), website crawls, channels (Telegram/Slack/WhatsApp/email), action policies, AI and voice usage |
 | `manage_workspace_identity` | Company name, colours, logo, widget theme, legal and support links, custom domain |
 | `manage_widgets` | Create, configure and deactivate chat widgets; embed code; proactive widget campaigns |
-| `manage_integrations` | Connect the product's APIs from OpenAPI documents, set request bindings and AI instructions, test, turn on or off. Outgoing webhooks. Never integration credentials. |
+| `manage_integrations` | Connect the product's APIs from OpenAPI documents, set request bindings and AI instructions, test, turn on or off. Outgoing webhooks. Never integration credentials. Webhooks also need `chat:read`, since they send conversation content. |
 | `view_audit_logs` | Security and configuration audit log |
 | `manage_inbox_settings` | How conversations are organised: labels, saved replies, teams, inbox members, assignment, business hours, SLA policies, automation rules, the satisfaction survey. Not conversations themselves. |
 | `view_insights` | Conversation insights (topics, sentiment, outcomes), support reports and satisfaction-survey answers (read-only). Create the key with the "View insights" scope in Agent keys; Free workspaces get a plan_upgrade_required error. |

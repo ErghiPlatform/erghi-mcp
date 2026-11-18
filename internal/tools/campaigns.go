@@ -154,7 +154,13 @@ type deliveryIDInput struct {
 
 const webhookSecretNote = " The response includes the signing secret once: give it to the user for their receiving server and do not repeat it anywhere else."
 
+// registerWebhooks offers webhooks only to a key with manage_integrations and
+// chat:read: a webhook sends conversation and message content to its address,
+// and the API refuses a key without chat:read (403 scope_required).
 func registerWebhooks(r *registry) {
+	if !r.hasAny(needChatRead) {
+		return
+	}
 	const base = "/api/v1/webhooks"
 	add(r, read, needIntegrations, &mcp.Tool{
 		Name:        "list_webhook_event_types",

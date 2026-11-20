@@ -128,7 +128,7 @@ func conversationStep(ctx context.Context, rem *Remote, scopes []string, app str
 		return failed(s, errors.New(textOf(res)))
 	}
 	var page struct {
-		Total int `json:"Total"`
+		Total int `json:"total"`
 	}
 	if err := json.Unmarshal([]byte(textOf(res)), &page); err != nil {
 		return failed(s, err)

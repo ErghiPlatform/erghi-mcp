@@ -25,6 +25,10 @@ const (
 	scopeChatRead     = "chat:read"
 	scopeChatWrite    = "chat:write"
 	scopeContactsRead = "contacts:read"
+	// agent:runtime lets a key answer visitors as a reply engine. The API also
+	// requires it, next to configure_ai, for a key that creates, changes,
+	// re-keys or binds an engine.
+	scopeAgentRuntime = "agent:runtime"
 	// contacts:write is checked by the API on its own; a key with it also
 	// needs contacts:read to find the contact first.
 	scopeContactsWrite = "contacts:write"

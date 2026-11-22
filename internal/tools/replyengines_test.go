@@ -18,7 +18,12 @@ func TestReplyEngineToolsFollowTheirScope(t *testing.T) {
 		scopes []string
 		want   []string
 	}{
-		{[]string{"configure_ai"}, replyEngineAdminTools},
+		{[]string{"configure_ai", "agent:runtime"}, replyEngineAdminTools},
+		// Without agent:runtime the API refuses a key that creates, changes, re-keys or binds an engine.
+		{[]string{"configure_ai"}, []string{
+			"list_reply_engines", "get_reply_engine", "delete_reply_engine", "set_reply_engine_active",
+			"test_reply_engine", "get_reply_engine_health", "list_reply_engine_turns", "get_widget_reply_engine",
+		}},
 		{[]string{"manage_widgets"}, []string{"list_reply_engines", "get_widget_reply_engine"}},
 		{[]string{"manage_integrations", "chat:read", "agent:runtime"}, nil},
 	}
@@ -49,7 +54,7 @@ func TestReplyEngineToolsFollowTheirScope(t *testing.T) {
 }
 
 func TestReplyEnginePathsAndBodies(t *testing.T) {
-	h := newHarness(t, Options{Scopes: []string{"configure_ai"}})
+	h := newHarness(t, Options{Scopes: []string{"configure_ai", "agent:runtime"}})
 	cases := []struct {
 		tool     string
 		args     map[string]any
@@ -117,7 +122,7 @@ func TestReplyEngineNamesOnlyKeyAlwaysAsksForNames(t *testing.T) {
 }
 
 func TestReplyEngineWritesNeedConfirmAndValidIDs(t *testing.T) {
-	h := newHarness(t, Options{Scopes: []string{"configure_ai"}})
+	h := newHarness(t, Options{Scopes: []string{"configure_ai", "agent:runtime"}})
 	cases := map[string]map[string]any{
 		"create_reply_engine":        {"name": "x", "mode": "Webhook", "url": "https://a.example"},
 		"update_reply_engine":        {"engineId": uuidA, "name": "y"},
@@ -168,7 +173,7 @@ func TestReplyEngineSecretNotice(t *testing.T) {
 }
 
 func TestReplyEngineSchemasIncludeSettings(t *testing.T) {
-	h := newHarness(t, Options{Scopes: []string{"configure_ai"}})
+	h := newHarness(t, Options{Scopes: []string{"configure_ai", "agent:runtime"}})
 	res, err := h.session.ListTools(t.Context(), nil)
 	if err != nil {
 		t.Fatal(err)

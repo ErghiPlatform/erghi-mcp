@@ -84,6 +84,20 @@ func (r *registry) hasAny(scopes []string) bool {
 	return slices.ContainsFunc(scopes, func(s string) bool { return slices.Contains(r.opts.Scopes, s) })
 }
 
+// missingScope is a scope no key holds: a tool gated on it is never offered.
+const missingScope = "\x00missing"
+
+// allOf gates a tool on every listed scope (add's scopes are any-of): it
+// returns the first scope when the key holds them all, else missingScope.
+func (r *registry) allOf(scopes ...string) []string {
+	for _, s := range scopes {
+		if !slices.Contains(r.opts.Scopes, s) {
+			return []string{missingScope}
+		}
+	}
+	return scopes[:1]
+}
+
 // add registers a typed tool. scopes lists the scopes that unlock it (any
 // one is enough); nil means any key may call it.
 func add[In any](r *registry, k kind, scopes []string, t *mcp.Tool, h func(context.Context, In) (any, error)) {

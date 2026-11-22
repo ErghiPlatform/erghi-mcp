@@ -69,6 +69,7 @@ func Register(server *mcp.Server, api *erghi.Client, opts Options) []string {
 	registerReports(r)
 	registerCampaigns(r)
 	registerWebhooks(r)
+	registerReplyEngines(r)
 	registerInbox(r)
 	registerConversations(r)
 	registerAgentWork(r)

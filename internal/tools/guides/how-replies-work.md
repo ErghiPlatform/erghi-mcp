@@ -13,6 +13,8 @@ Every visitor message goes through the same steps. Each one is something you can
 | 7. Model | The workspace's model answers; on failure the fallback chain is tried. A monthly spend cap stops AI replies when reached. | `update_ai_settings`, `list_available_models`, `get_ai_cost_usage` |
 | 8. Channels | The same assistant answers the website widget, Telegram and WhatsApp; Slack gets hand-off notifications. | `create_widget`, `connect_telegram`, `connect_whatsapp`, `connect_slack` |
 
+A workspace can also have its own agent answer a widget's visitors instead of Erghi AI. That is a *reply engine* (a webhook, a custom model, a live connection or a queue), bound to a widget, or to one of its channels, with `set_widget_reply_engine`. Where an engine is bound, steps 1 to 7 above do not run for that widget; the engine's agent replies, and if it fails or times out the engine's fallback applies (Erghi AI, a person, or a fixed message). Manage engines with `create_reply_engine`, `test_reply_engine` and `get_reply_engine_health`. The agent itself talks to Erghi through the runtime API in the SDKs with an `agent:runtime` key; this server has no runtime tools.
+
 Rules the assistant always follows, whatever the instructions say:
 - Facts about the business come only from the knowledge base, tool results or the workspace's instructions. A gap in knowledge shows up as "I don't know" or a hand-off, never a guess. So **fix wrong or missing answers in the knowledge base, not in the instructions**.
 - Live data (orders, balances, bookings) needs a tool call before any number is stated.

@@ -478,13 +478,13 @@ func registerTeamsAndRouting(r *registry) {
 		}
 		return r.api.Do(ctx, http.MethodDelete, p, nil, nil)
 	})
-	add(r, read, needInbox, &mcp.Tool{
+	add(r, read, needInboxOrWorkforce, &mcp.Tool{
 		Name:        "get_assignment_settings",
 		Description: "How new conversations are assigned to agents.",
 	}, func(ctx context.Context, _ empty) (any, error) {
 		return r.api.Do(ctx, http.MethodGet, "/api/v1/assignment-settings", nil, nil)
 	})
-	add(r, write, needInbox, &mcp.Tool{
+	add(r, write, needInboxOrWorkforce, &mcp.Tool{
 		Name:        "update_assignment_settings",
 		Description: "Choose how new conversations are assigned: legacy, round_robin or balanced (fewest open conversations). Every field is replaced.",
 	}, func(ctx context.Context, in assignmentSettingsInput) (any, error) {

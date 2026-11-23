@@ -23,7 +23,9 @@ In the Erghi admin app, go to **Settings → Agent API keys → Create key**. Th
 | `manage_integrations` | Connect the product's APIs from OpenAPI documents, set request bindings and AI instructions, test, turn on or off. Outgoing webhooks. Never integration credentials. Webhooks also need `chat:read`, since they send conversation content. |
 | `view_audit_logs` | Security and configuration audit log |
 | `manage_inbox_settings` | How conversations are organised: labels, saved replies, teams, inbox members, assignment, business hours, SLA policies, automation rules, the satisfaction survey. Not conversations themselves. |
-| `view_insights` | Conversation insights (topics, sentiment, outcomes), support reports and satisfaction-survey answers (read-only). Create the key with the "View insights" scope in Agent keys; Free workspaces get a plan_upgrade_required error. |
+| `manage_workforce` | The support floor: force an agent's status or sign them out, away reasons, routing skills and agent routing profiles, workforce and assignment settings. Needs a server with workforce management. |
+| `moderate_social` | The social inbox: read comments and posts of connected Facebook Pages and Instagram accounts, hide or unhide, mark done, reply (publicly or privately). Settings of a connected account need `configure_ai`. Connecting an account is done in the dashboard. |
+| `view_insights` | Conversation insights (topics, sentiment, outcomes), support reports, workforce and social reports and satisfaction-survey answers (read-only). Create the key with the "View insights" scope in Agent keys; Free workspaces get a plan_upgrade_required error. |
 
 The server only offers tools the key's scopes allow. The API checks every scope again on its own side.
 
@@ -128,6 +130,8 @@ Clients that don't support MCP prompts can paste the example prompts from [docs/
 | Integrations | `list_integrations`, `get_integration`, `add_integration_from_openapi`, `replace_integration_spec`, `refresh_integration_endpoints`, `update_integration_base_url`, `set_integration_tool_context`, `set_endpoint_timeout`, `set_integration_active`, `test_integration_endpoint`, `delete_integration` |
 | Webhooks | `list_webhook_event_types`, `list_webhooks`, `get_webhook`, `create_webhook`, `update_webhook`, `delete_webhook`, `rotate_webhook_secret`, `send_test_webhook`, `list_webhook_deliveries`, `get_webhook_delivery`, `retry_webhook_delivery` |
 | Inbox settings | Labels: `list_conversation_labels`, `create_conversation_label`, `update_conversation_label`, `delete_conversation_label`. Saved replies: `list_saved_replies`, `create_saved_reply`, `update_saved_reply`, `delete_saved_reply`. Teams: `list_teams`, `get_team`, `create_team`, `update_team`, `delete_team`, `list_team_members`, `add_team_member`, `remove_team_member`. Routing: `list_assignable_members`, `list_inbox_members`, `add_inbox_member`, `remove_inbox_member`, `get_assignment_settings`, `update_assignment_settings`. Hours and SLAs: `get_business_hours`, `set_business_hours`, `clear_inbox_business_hours`, `list_sla_policies`, `get_sla_policy`, `create_sla_policy`, `update_sla_policy`, `delete_sla_policy`. Automations: `list_automations`, `get_automation`, `create_automation`, `update_automation`, `delete_automation`, `reorder_automations`, `test_automation`, `list_automation_runs`. Survey: `get_csat_settings`, `update_csat_settings` |
+| Workforce | `manage_workforce`: `set_agent_status`, `sign_out_agent`, `create_away_reason`, `update_away_reason`, `archive_away_reason`, `create_routing_skill`, `update_routing_skill`, `archive_routing_skill`, `get_agent_routing_profile`, `update_agent_routing_profile`, `update_workforce_settings` (and `get_assignment_settings`, `update_assignment_settings`). Reports (`view_insights`): `get_agent_status_report`, `get_agent_status_timeline`, `get_agent_performance_report` |
+| Social inbox | Settings (`configure_ai`): `list_social_connections`, `get_social_connection_settings`, `update_social_connection_settings`, `get_social_disconnect_preview`. Comments (`moderate_social`): `list_social_posts`, `list_social_comments`, `hide_social_comment`, `unhide_social_comment`, `mark_social_comment_done`, `reply_to_social_comment`, `private_reply_to_social_comment`, `ignore_social_commenter`. Report (`view_insights`): `get_social_report` |
 | Audit | `list_audit_logs` |
 | Insights and reports | `get_insights_summary`, `list_insight_conversations`, `get_report_summary`, `get_first_response_distribution`, `get_report_breakdown`, `list_csat_responses` (need the `view_insights` scope) |
 | Conversations | `list_conversations`, `get_conversation`, `send_reply`, `resolve_conversation`, `get_billing_plans` (forwarded from Erghi's hosted MCP endpoint), `list_conversation_messages` |
@@ -148,6 +152,7 @@ Each visitor message is answered from the persona and instructions, the knowledg
 | `integrations` | Connecting an API; `identity`, `secret`, `metadata` and `conversation` placeholders |
 | `policies` | Required steps, verified identity, argument rules |
 | `security` | What keys can and can't do |
+| `workforce_and_social` | Agent status, away reasons, skills and routing; the Facebook/Instagram social inbox |
 
 `review_chat_setup` reads all of it (as far as the key's scopes allow) and returns findings ranked by severity, for example:
 

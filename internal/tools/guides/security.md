@@ -12,7 +12,9 @@ Scopes on the key decide which tools exist:
 | `manage_widgets` | Widgets, embed code, proactive campaigns; read which reply engine answers a widget |
 | `manage_integrations` | Integrations (specs, tool context, activate, test, delete), and outgoing webhooks together with `chat:read` |
 | `manage_inbox_settings` | Labels, saved replies, teams, routing, business hours, SLAs, automation rules, satisfaction survey |
-| `view_insights` | Insights, reports, satisfaction answers (read-only) |
+| `view_insights` | Insights, reports, satisfaction answers, workforce and social reports (read-only) |
+| `manage_workforce` | Agent status, away reasons, routing skills and profiles, workforce settings, assignment settings |
+| `moderate_social` | Read, hide, unhide and reply to comments on connected Facebook Pages and Instagram accounts (replies are public). Social connection settings need `configure_ai`. |
 | `view_audit_logs` | Audit log |
 
 Always people-only, through the admin app: billing and plans, inviting members and changing roles, API keys, single sign-on, the widget identity secret, integration credentials, and changing the base URL of an integration that has credentials. Blocking or erasing contacts and contact notes are people-only too. A key works conversations as itself: notes it adds show its name with "(API key)", and every change is in the audit log under the key. Bulk actions and macros need confirm=true; a macro can send a saved reply to the customer.

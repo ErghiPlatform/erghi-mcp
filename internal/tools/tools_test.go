@@ -24,6 +24,8 @@ type harness struct {
 	session *mcp.ClientSession
 	mu      sync.Mutex
 	calls   []recorded
+	// override, when set, may answer a request itself (returns true).
+	override func(w http.ResponseWriter, r *http.Request) bool
 }
 
 func newHarness(t *testing.T, opts Options) *harness {
@@ -41,6 +43,9 @@ func newHarness(t *testing.T, opts Options) *harness {
 		h.mu.Lock()
 		h.calls = append(h.calls, recorded{r.Method, r.URL.RequestURI(), string(body)})
 		h.mu.Unlock()
+		if h.override != nil && h.override(w, r) {
+			return
+		}
 		switch r.URL.Path {
 		case "/api/widgets":
 			_, _ = w.Write([]byte(`[]`))

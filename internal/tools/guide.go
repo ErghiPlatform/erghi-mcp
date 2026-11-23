@@ -21,10 +21,11 @@ var guideTopics = []struct{ topic, file, about string }{
 	{"integrations", "integrations.md", "connecting an API, request bindings, identity/secret/metadata placeholders"},
 	{"policies", "policies.md", "action policies: required steps, verified identity, argument rules"},
 	{"security", "security.md", "what API keys can and can't do"},
+	{"workforce_and_social", "workforce-and-social.md", "agent status, away reasons, skills and routing; the Facebook/Instagram social inbox"},
 }
 
 type guideInput struct {
-	Topic string `json:"topic,omitempty" jsonschema:"how_replies_work, product_analysis, knowledge, integrations, policies or security; omit to list topics"`
+	Topic string `json:"topic,omitempty" jsonschema:"how_replies_work, product_analysis, knowledge, integrations, policies, security or workforce_and_social; omit to list topics"`
 }
 
 func registerGuide(r *registry) {

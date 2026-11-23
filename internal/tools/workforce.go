@@ -16,11 +16,10 @@ import (
 // per-agent routing profiles, the workforce settings, and the time-in-status
 // reports (view_insights).
 //
-// An API key cannot reach the endpoints that only need view_conversations (the
-// live board, the lists of away reasons and skills, GET settings, "my status",
-// the routing decision of a conversation), so none of them is wrapped here.
-// The create, update and archive answers carry the objects they touch, and
-// get_agent_status_report names the away reasons used.
+// A key with manage_workforce can read what it can change (the live board, the
+// away reasons, the skills and the settings). "My status" and a conversation's
+// routing decision need a signed-in teammate or view_conversations, which a key
+// never holds, so they are not wrapped here.
 
 const (
 	scopeWorkforce = "manage_workforce"
@@ -114,12 +113,23 @@ type routingSettingsFields struct {
 }
 
 type workforceSettingsInput struct {
-	StatusOnSignIn            string                 `json:"statusOnSignIn" jsonschema:"ready or away: the status an agent gets when they first connect"`
-	RequireAwayReason         bool                   `json:"requireAwayReason" jsonschema:"Agents must pick a reason when they go away"`
-	IdleAwayMinutes           *int                   `json:"idleAwayMinutes,omitempty" jsonschema:"Move a Ready agent with no activity for this many minutes to Away (reads agent activity); leave out for off"`
-	SignOutAfterHoursMinutes  *int                   `json:"signOutAfterHoursMinutes,omitempty" jsonschema:"Sign agents out this many minutes after business hours end; leave out for off"`
-	AutoAwayAfterMissedOffers *int                   `json:"autoAwayAfterMissedOffers,omitempty" jsonschema:"Move an agent to Away after this many missed offers in a row; leave out for off"`
+	StatusOnSignIn            string                 `json:"statusOnSignIn,omitempty" jsonschema:"ready or away: the status an agent gets when they first connect; leave out to keep"`
+	RequireAwayReason         *bool                  `json:"requireAwayReason,omitempty" jsonschema:"Agents must pick a reason when they go away; leave out to keep"`
+	IdleAwayMinutes           *int                   `json:"idleAwayMinutes,omitempty" jsonschema:"Move a Ready agent with no activity for this many minutes to Away (reads agent activity); 0 turns it off, leave out to keep"`
+	SignOutAfterHoursMinutes  *int                   `json:"signOutAfterHoursMinutes,omitempty" jsonschema:"Sign agents out this many minutes after business hours end; 0 turns it off, leave out to keep"`
+	AutoAwayAfterMissedOffers *int                   `json:"autoAwayAfterMissedOffers,omitempty" jsonschema:"Move an agent to Away after this many missed offers in a row; 0 turns it off, leave out to keep"`
 	Routing                   *routingSettingsFields `json:"routing,omitempty" jsonschema:"Routing options; leave a field out to keep it"`
+}
+
+type includeArchivedInput struct {
+	IncludeArchived bool `json:"includeArchived,omitempty" jsonschema:"Also list archived ones"`
+}
+
+func (f includeArchivedInput) query() url.Values {
+	if !f.IncludeArchived {
+		return nil
+	}
+	return url.Values{"includeArchived": {"true"}}
 }
 
 type workforceReportInput struct {
@@ -201,10 +211,22 @@ func registerAgentControl(r *registry) {
 
 func registerAwayReasonsAndSkills(r *registry) {
 	const reasons = workforceBase + "/away-reasons"
+	add(r, read, needWorkforce, &mcp.Tool{
+		Name:        "list_away_reasons",
+		Description: "The away reasons agents can pick (system ones like Lunch and Break, and the workspace's own), with colour, time limit, order and whether going away returns chats to the queue.",
+	}, func(ctx context.Context, in includeArchivedInput) (any, error) {
+		return r.callFeature(ctx, unsupportedWorkforce, http.MethodGet, reasons, in.query(), nil)
+	})
+	add(r, read, needWorkforce, &mcp.Tool{
+		Name:        "list_routing_skills",
+		Description: "The routing skills (name and description). With AI routing on, the AI matches chats to skills by these descriptions.",
+	}, func(ctx context.Context, in includeArchivedInput) (any, error) {
+		return r.callFeature(ctx, unsupportedWorkforce, http.MethodGet, workforceBase+"/skills", in.query(), nil)
+	})
 	add(r, write, needWorkforce, &mcp.Tool{
 		Name: "create_away_reason",
 		Description: "Add an away reason agents can choose (Lunch, Training, ...). The answer is the new reason with its id. " +
-			"A key cannot list the existing reasons; the workforce report names the ones in use.",
+			"Check list_away_reasons first so you don't add a duplicate.",
 	}, func(ctx context.Context, in awayReasonFields) (any, error) {
 		return r.callFeature(ctx, unsupportedWorkforce, http.MethodPost, reasons, nil, in)
 	})
@@ -277,6 +299,19 @@ func registerAwayReasonsAndSkills(r *registry) {
 
 func registerAgentProfilesAndSettings(r *registry) {
 	add(r, read, needWorkforce, &mcp.Tool{
+		Name:        "get_workforce_settings",
+		Description: "The workforce settings: status on sign-in, required away reason, idle-away, sign-out after hours, auto-away after missed offers (null means off), and the routing options.",
+	}, func(ctx context.Context, _ empty) (any, error) {
+		return r.callFeature(ctx, unsupportedWorkforce, http.MethodGet, workforceBase+"/settings", nil, nil)
+	})
+	add(r, read, needWorkforce, &mcp.Tool{
+		Name: "get_workforce_live",
+		Description: "The live board: each teammate's current status (ready, busy, away with reason, offline) and since when, their open chats against capacity, and the queue. " +
+			"Supervisors' notes on away reasons are never included for an API key.",
+	}, func(ctx context.Context, _ empty) (any, error) {
+		return r.callFeature(ctx, unsupportedWorkforce, http.MethodGet, workforceBase+"/live", nil, nil)
+	})
+	add(r, read, needWorkforce, &mcp.Tool{
 		Name:        "get_agent_routing_profile",
 		Description: "One teammate's routing profile: their chat capacity, languages and skills with levels.",
 	}, func(ctx context.Context, in agentInput) (any, error) {
@@ -316,8 +351,8 @@ func registerAgentProfilesAndSettings(r *registry) {
 		Name: "update_workforce_settings",
 		Description: "Workforce settings: the status agents get on sign-in, whether an away reason is required, idle-away, sign-out after business hours, " +
 			"auto-away after missed offers, and the routing options (AI routing, language match, skill wait, offer mode ring and its timeout). " +
-			"statusOnSignIn, requireAwayReason and the three limits are always replaced (a limit you leave out is turned off); routing fields you leave out are kept. " +
-			"A key cannot read the current settings, so ask the user what they want in full.",
+			"Send only what changes: every field you leave out keeps its value. Send 0 to turn idle-away, sign-out after hours or auto-away off. " +
+			"Read get_workforce_settings first.",
 	}, func(ctx context.Context, in workforceSettingsInput) (any, error) {
 		return r.callFeature(ctx, unsupportedWorkforce, http.MethodPut, workforceBase+"/settings", nil, in)
 	})

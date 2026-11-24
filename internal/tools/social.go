@@ -72,7 +72,7 @@ func (r *registry) callSocial(ctx context.Context, method, path string, q url.Va
 }
 
 type connectionInput struct {
-	ConnectionID string `json:"connectionId" jsonschema:"A connection id from list_social_connections"`
+	ConnectionID string `json:"connectionId" jsonschema:"A connection id from list_social_connections or list_social_inbox_accounts"`
 }
 
 type updateSocialSettingsInput struct {
@@ -217,6 +217,13 @@ func registerSocialConnections(r *registry) {
 }
 
 func registerSocialComments(r *registry) {
+	add(r, read, needSocial, &mcp.Tool{
+		Name: "list_social_inbox_accounts",
+		Description: "The connected Facebook Pages (messenger) and Instagram accounts with only id, channel, name and status, for a key that moderates comments but cannot configure the AI. " +
+			"Use the id as connectionId in list_social_posts and list_social_comments. Settings and reauthorization details are in list_social_connections (configure_ai).",
+	}, func(ctx context.Context, _ empty) (any, error) {
+		return r.callSocial(ctx, http.MethodGet, socialBase+"/connections", nil, nil)
+	})
 	add(r, read, needSocial, &mcp.Tool{
 		Name: "list_social_posts",
 		Description: "Posts of the connected Facebook Pages and Instagram accounts that have comments, most recently commented first, with comment counts and how many need attention. " +
